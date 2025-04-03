@@ -20,7 +20,7 @@ pub fn main() !void {
 
     const model_config = blk: {
         var map_config = Model.Config.MapConfig{
-            .bounds = .{ .y = 8, .x = 8 },
+            .bounds = .{ .y = 7, .x = 8 },
         };
         std.debug.assert(map_config.check());
 
@@ -63,9 +63,8 @@ pub fn main() !void {
         state_ = state.step(state_input, model_config) orelse unreachable;
 
         raylib.BeginDrawing();
-        raylib.ClearBackground(raylib.LIGHTGRAY);
 
-        renderer.draw(state_);
+        renderer.draw(state_, model_config);
 
         raylib.EndDrawing();
     }
