@@ -8,9 +8,6 @@ cursor: Cursor = .{},
 const State = @This();
 
 pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?State {
-    std.debug.print("state: {}\n", .{state.cursor});
-    std.debug.print("state: {}\n", .{state.model.pieces_buffer[0]});
-
     var out_state = @as(State, undefined);
 
     const cursor1 = state.cursor.move_dirs(
@@ -53,7 +50,7 @@ const constants = struct {
     const PathSize = u4;
 };
 
-const Cursor = struct {
+pub const Cursor = struct {
     pos: Model.Position = .{},
     selection: Selection = .none,
 
@@ -68,7 +65,7 @@ const Cursor = struct {
             path_buffer: [constants.max_path]Model.Direction = .{undefined} ** constants.max_path,
             path_size: constants.PathSize = 0,
 
-            fn path(selection: *const PieceSelection) []const Model.Direction {
+            pub fn path(selection: *const PieceSelection) []const Model.Direction {
                 const p = selection.path_buffer[0..selection.path_size];
                 return p;
             }
