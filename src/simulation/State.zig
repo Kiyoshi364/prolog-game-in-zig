@@ -78,15 +78,25 @@ pub const Cursor = struct {
                 .none => .none,
                 .piece => |piece| blk: {
                     var new_piece = piece;
-                    // TODO: better path solving
-                    if (new_piece.path_size > 0 and std.meta.eql(
-                        dir.opposite(),
-                        new_piece.path_buffer[new_piece.path_size - 1],
-                    )) {
-                        new_piece.path_size -= 1;
-                    } else {
-                        new_piece.path_buffer[new_piece.path_size] = dir;
-                        new_piece.path_size += 1;
+                    new_piece.path_buffer[new_piece.path_size] = dir;
+                    new_piece.path_size += 1;
+                    { // shrink_path
+                        var x = @as(isize, 0);
+                        var y = @as(isize, 0);
+                        const old_path_size = new_piece.path_size;
+                        for (0..old_path_size) |pre_i| {
+                            const i = old_path_size - pre_i - 1;
+                            const dir_ = new_piece.path_buffer[i];
+                            switch (dir_) {
+                                .up => y += 1,
+                                .right => x += -1,
+                                .down => y += -1,
+                                .left => x += 1,
+                            }
+                            if (x == 0 and y == 0) {
+                                new_piece.path_size = @intCast(i);
+                            }
+                        }
                     }
                     break :blk .{ .piece = new_piece };
                 },
