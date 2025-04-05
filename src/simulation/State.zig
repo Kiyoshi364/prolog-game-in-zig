@@ -54,10 +54,13 @@ pub const Cursor = struct {
     pos: Model.Position = .{},
     selection: Selection = .none,
 
-    const Selection = union(enum) {
+    pub const Selection = union(enum) {
         none: void,
         piece: PieceSelection,
         // menu: MenuSelection,
+
+        pub const @"enum": type = @typeInfo(@This()).@"union".tag_type.?;
+        pub const count: comptime_int = @typeInfo(Selection.@"enum").@"enum".fields.len;
 
         const PieceSelection = struct {
             old_pos: Model.Position,

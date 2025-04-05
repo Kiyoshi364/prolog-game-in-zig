@@ -154,11 +154,13 @@ pub const Position = struct {
 
 pub const Piece = struct {
     pos: Position,
-    kind: PieceKind,
+    kind: Kind,
 
-    pub const PieceKind = enum {
+    pub const Kind = enum {
         capitan,
         minion,
+
+        pub const count: comptime_int = @typeInfo(@This()).@"enum".fields.len;
     };
 
     pub fn moved_to(piece: Piece, pos: Position) Piece {
