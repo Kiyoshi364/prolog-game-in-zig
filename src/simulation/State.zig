@@ -6,10 +6,14 @@ const Model = @import("Model.zig");
 
 model: Model = .{},
 cursor: Cursor = .{},
+anims: Animations = .{},
 
 const State = @This();
+const Animations = utils.Buffer(Animation, Model.constants.PiecesSize, Model.constants.max_pieces);
+const Path = utils.Buffer(Model.Direction, constants.PathSize, constants.max_path);
 
 pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?State {
+    std.debug.assert(state.check());
     var out_state = @as(State, undefined);
 
     const cursor1 = state.cursor.move_dirs(
@@ -17,21 +21,37 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
         model_config.map.bounds,
     ) orelse state.cursor;
 
-    const animation_input = if (cursor1.handle_button(
+    if (cursor1.handle_button(
         state_input.button,
         state.model.pieces.slice(),
         &out_state.cursor,
-    )) |model_input|
-        state.model.step(model_input, model_config, &out_state.model) orelse return null
-    else blk: {
+    )) |model_input| {
+        const anim_input = state.model.step(model_input, model_config, &out_state.model) orelse return null;
+        out_state.anims = state.update_animations(anim_input);
+    } else {
         out_state.model = state.model;
-        break :blk .none;
-    };
+        out_state.anims = state.tick_anims();
+    }
 
-    // TODO: animation
-    _ = animation_input;
-
+    std.debug.assert(out_state.check());
     return out_state;
+}
+
+pub fn check(state: State) bool {
+    if (0 < state.anims.size) {
+        const anims_slice = state.anims.slice();
+        for (anims_slice[1..], 0..) |curr_anim, i| {
+            const prev_anim = anims_slice[i];
+            if (curr_anim.piece_id < prev_anim.piece_id) {
+                return false;
+            } else {
+                std.debug.assert(prev_anim.piece_id != curr_anim.piece_id);
+            }
+        }
+    } else {
+        // Nothing
+    }
+    return true;
 }
 
 pub const StateInput = struct {
@@ -47,9 +67,11 @@ pub const StateInput = struct {
     };
 };
 
-const constants = struct {
+pub const constants = struct {
     const max_path = 15;
     const PathSize = u4;
+
+    pub const animation_start_timer = 20;
 };
 
 pub const Cursor = struct {
@@ -67,7 +89,7 @@ pub const Cursor = struct {
         const PieceSelection = struct {
             old_pos: Model.Position,
             piece: Model.Piece,
-            path: utils.Buffer(Model.Direction, constants.PathSize, constants.max_path) = .{},
+            path: Path = .{},
         };
 
         // const MenuSelection = struct {};
@@ -180,3 +202,136 @@ pub const Cursor = struct {
         };
     }
 };
+
+pub const Animation = struct {
+    piece_id: Model.constants.PieceID,
+    state: AnimState,
+
+    const AnimState = union(enum) {
+        move: Move,
+
+        pub const Move = struct {
+            curr_pos: Model.Position,
+            timer: u8 = constants.animation_start_timer,
+            path: Path = undefined,
+            path_idx: constants.PathSize = 0,
+
+            fn tick(move: Move) ?Move {
+                return if (0 < move.timer)
+                    .{
+                        .curr_pos = move.curr_pos,
+                        .timer = move.timer - 1,
+                        .path = move.path,
+                        .path_idx = move.path_idx,
+                    }
+                else if (move.path_idx + 1 < move.path.size)
+                    .{
+                        .curr_pos = move.curr_pos.move_unbounded(move.path.get(move.path_idx)),
+                        .path = move.path,
+                        .path_idx = move.path_idx + 1,
+                    }
+                else
+                    null;
+            }
+        };
+    };
+
+    fn tick(anim: Animation) ?Animation {
+        return switch (anim.state) {
+            .move => |move| if (move.tick()) |new_move|
+                .{
+                    .piece_id = anim.piece_id,
+                    .state = .{ .move = new_move },
+                }
+            else
+                null,
+        };
+    }
+
+    fn merge(anim: Animation, anim_input: Model.AnimationInput) ?Animation {
+        // TODO: find a better merge than dropping old animation
+        _ = anim;
+        return fromAnimationInput(anim_input);
+    }
+
+    fn fromAnimationInput(anim_input: Model.AnimationInput) ?Animation {
+        return switch (anim_input) {
+            .move => |move| if (0 < move.path.len)
+                .{
+                    .piece_id = move.piece.id,
+                    .state = .{ .move = .{
+                        .curr_pos = move.piece.pos,
+                        .path = (Path{}).push_slice(move.path),
+                    } },
+                }
+            else
+                null,
+        };
+    }
+};
+
+fn update_animations(state: State, anim_input: Model.AnimationInput) Animations {
+    const piece_id = anim_input.piece_id();
+    const anims_slice = state.anims.slice();
+
+    var buffer = Animations.Builder{};
+    const idx_after_inclusion = for (anims_slice, 0..) |anim, i| {
+        if (piece_id < anim.piece_id) {
+            break i;
+        } else if (piece_id == anim.piece_id) {
+            break i + 1;
+        } else {
+            if (anim.tick()) |new_anim| {
+                buffer.push_mut(new_anim);
+            } else {
+                // Nothing
+            }
+        }
+    } else anims_slice.len;
+
+    if (idx_after_inclusion < anims_slice.len) {
+        {
+            const anim = anims_slice[idx_after_inclusion];
+            if (anim.tick()) |new_anim| {
+                if (new_anim.merge(anim_input)) |merged_anim| {
+                    buffer.push_mut(merged_anim);
+                } else {
+                    // Nothing
+                }
+            } else {
+                if (Animation.fromAnimationInput(anim_input)) |in_anim| {
+                    buffer.push_mut(in_anim);
+                } else {
+                    // Nothing
+                }
+            }
+        }
+        for (anims_slice[idx_after_inclusion..]) |anim| {
+            if (anim.tick()) |new_anim| {
+                buffer.push_mut(new_anim);
+            } else {
+                // Nothing
+            }
+        }
+    } else {
+        if (Animation.fromAnimationInput(anim_input)) |in_anim| {
+            buffer.push_mut(in_anim);
+        } else {
+            // Nothing
+        }
+    }
+
+    return buffer.frozen();
+}
+
+fn tick_anims(state: State) Animations {
+    var buffer = Animations.Builder{};
+    for (state.anims.slice()) |anim| {
+        if (anim.tick()) |new_anim| {
+            buffer.push_mut(new_anim);
+        } else {
+            // Nothing
+        }
+    }
+    return buffer.frozen();
+}

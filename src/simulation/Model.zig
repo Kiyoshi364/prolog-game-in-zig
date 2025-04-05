@@ -24,7 +24,7 @@ pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model)
                 .{ .pos = new_pos, .kind = p.kind, .id = p.id },
             );
             std.debug.assert(out_model.check());
-            break :blk .none;
+            break :blk .{ .move = .{ .piece = move.piece, .path = move.path } };
         },
     };
 }
@@ -106,7 +106,13 @@ pub const Input = union(enum) {
 };
 
 pub const AnimationInput = union(enum) {
-    none: void,
+    move: Input.Move,
+
+    pub fn piece_id(anim: AnimationInput) constants.PieceID {
+        return switch (anim) {
+            .move => |move| move.piece.id,
+        };
+    }
 };
 
 pub const Direction = enum(u2) {
@@ -124,6 +130,16 @@ pub const Direction = enum(u2) {
             .left => .right,
         };
     }
+
+    const AddData = struct { name: Position.PositionTag, x: u1, y: u1, adds: bool };
+    pub fn toAddData(dir: Direction) AddData {
+        return switch (dir) {
+            .up => .{ .name = .y, .x = 0, .y = 1, .adds = false },
+            .right => .{ .name = .x, .x = 1, .y = 0, .adds = true },
+            .down => .{ .name = .y, .x = 0, .y = 1, .adds = true },
+            .left => .{ .name = .x, .x = 1, .y = 0, .adds = false },
+        };
+    }
 };
 
 pub const Position = struct {
@@ -137,14 +153,16 @@ pub const Position = struct {
         };
     }
 
+    pub fn move_unbounded(pos: Position, dir: Direction) Position {
+        const a = dir.toAddData();
+        return if (a.adds)
+            .{ .x = pos.x + a.x, .y = pos.y + a.y }
+        else
+            .{ .x = pos.x - a.x, .y = pos.y - a.y };
+    }
+
     pub fn move(pos: Position, dir: Direction, bounds: Position) ?Position {
-        const S = struct { name: PositionTag, x: u1, y: u1, adds: bool };
-        const a = @as(S, switch (dir) {
-            .up => .{ .name = .y, .x = 0, .y = 1, .adds = false },
-            .right => .{ .name = .x, .x = 1, .y = 0, .adds = true },
-            .down => .{ .name = .y, .x = 0, .y = 1, .adds = true },
-            .left => .{ .name = .x, .x = 1, .y = 0, .adds = false },
-        });
+        const a = dir.toAddData();
         return if (a.adds)
             if (pos.by_tag(a.name) < bounds.by_tag(a.name) -| 1)
                 .{ .x = pos.x + a.x, .y = pos.y + a.y }
