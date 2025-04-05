@@ -140,7 +140,7 @@ fn draw_path(t: ScreenPos, path: []const Model.Direction) void {
         .x = t.x + half_tile_size,
         .y = t.y + half_tile_size,
     };
-    for (path, 0..) |_, pre_i| {
+    for (0..path.len) |pre_i| {
         const i = path.len - pre_i - 1;
         const p = path[i];
         const t0 = @as(ScreenPos, switch (p) {
