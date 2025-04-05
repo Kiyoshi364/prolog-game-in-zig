@@ -41,6 +41,10 @@ pub fn main() !void {
             .{ .kind = .minion, .pos = .{ .y = 2, .x = 5 } },
         };
         state.model.pieces = state.model.pieces.push_slice(&init_pieces);
+        for (state.model.pieces.slice_mut()) |*piece| {
+            piece.*.id = state.model.genid_mut();
+        }
+        std.debug.assert(state.model.check());
     }
 
     var state_ = @as(State, undefined);

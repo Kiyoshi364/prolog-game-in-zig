@@ -5,15 +5,13 @@ const utils = @import("utils");
 const Model = @This();
 
 pieces: utils.Buffer(Piece, constants.PiecesSize, constants.max_pieces) = .{},
+piece_genid: constants.PieceID = 0,
 
 pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model) ?AnimationInput {
+    std.debug.assert(model.check());
     return switch (model_input) {
         .move => |move| blk: {
-            const piece_idx: constants.PiecesSize = for (model.pieces.slice(), 0..) |p, i| {
-                if (std.meta.eql(move.piece, p)) {
-                    break @intCast(i);
-                }
-            } else break :blk null;
+            const piece_idx = move.piece.find_insorted(model.pieces.slice()) orelse break :blk null;
             const p = model.pieces.get(piece_idx);
 
             const new_pos = move.piece.pos.move_many(
@@ -23,11 +21,35 @@ pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model)
 
             out_model.*.pieces = model.pieces.replace(
                 piece_idx,
-                .{ .pos = new_pos, .kind = p.kind },
+                .{ .pos = new_pos, .kind = p.kind, .id = p.id },
             );
+            std.debug.assert(out_model.check());
             break :blk .none;
         },
     };
+}
+
+pub fn genid_mut(model: *Model) constants.PieceID {
+    model.*.piece_genid += 1;
+    return model.piece_genid;
+}
+
+pub fn check(model: Model) bool {
+    const pieces_slice = model.pieces.slice();
+    for (pieces_slice, 0..) |p, i| {
+        const id_zero = p.id <= 0;
+        const id_higher_than_gen = model.piece_genid < p.id;
+        if (id_zero or id_higher_than_gen) {
+            return false;
+        }
+        for (pieces_slice[i + 1 ..]) |p1| {
+            const ids_out_of_order = p1.id <= p.id;
+            if (ids_out_of_order) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 pub const Config = struct {
@@ -143,6 +165,7 @@ pub const Position = struct {
 };
 
 pub const Piece = struct {
+    id: constants.PieceID = 0,
     pos: Position,
     kind: Kind,
 
@@ -152,6 +175,26 @@ pub const Piece = struct {
 
         pub const count: comptime_int = @typeInfo(@This()).@"enum".fields.len;
     };
+
+    pub fn find_insorted(piece: Piece, pieces: []const Piece) ?constants.PiecesSize {
+        var min = @as(constants.PiecesSize, 0);
+        var max = @as(constants.PiecesSize, @intCast(pieces.len));
+        return while (min < max) {
+            const i = min + (max - min) / 2;
+            const p = pieces[i];
+            if (p.id < piece.id) {
+                min = i + 1;
+            } else if (piece.id < p.id) {
+                max = i;
+            } else {
+                std.debug.assert(piece.id == p.id);
+                break if (std.meta.eql(piece, p))
+                    i
+                else
+                    null;
+            }
+        } else null;
+    }
 
     pub fn moved_to(piece: Piece, pos: Position) Piece {
         var new_piece = piece;
@@ -164,4 +207,6 @@ pub const constants = struct {
     pub const max_map_storage = 256;
     pub const max_pieces = 128;
     pub const PiecesSize = u8;
+
+    pub const PieceID = u32;
 };
