@@ -40,10 +40,12 @@ pub fn main() !void {
             .{ .kind = .minion, .pos = .{ .y = 4, .x = 4 } },
             .{ .kind = .minion, .pos = .{ .y = 2, .x = 5 } },
         };
-        state.model.pieces = state.model.pieces.push_slice(&init_pieces);
-        for (state.model.pieces.slice_mut()) |*piece| {
+        var pieces = @TypeOf(state.model.pieces).Builder{};
+        pieces.push_slice_mut(&init_pieces);
+        for (pieces.slice_mut()) |*piece| {
             piece.*.id = state.model.genid_mut();
         }
+        state.model.pieces = pieces.frozen();
         std.debug.assert(state.model.check());
     }
 

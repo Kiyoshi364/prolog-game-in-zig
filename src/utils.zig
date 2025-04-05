@@ -13,9 +13,7 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
             _ = self;
             return capacity;
         }
-        pub fn slice_mut(self: *Self) []T {
-            return self.buffer[0..self.size];
-        }
+
         pub fn slice(self: *const Self) []const T {
             return self.buffer[0..self.size];
         }
@@ -25,37 +23,55 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
         }
 
         pub fn push(self: *const Self, item: T) Self {
-            std.debug.assert(self.size < capacity);
             return self.push_slice(&.{item});
         }
 
         pub fn push_slice(self: *const Self, items: []const T) Self {
-            std.debug.assert(self.size + items.len < capacity);
-            var buffer = @as([capacity]T, undefined);
-            for (buffer[0..self.size], self.slice()) |*d, s| {
-                d.* = s;
-            }
-            for (buffer[self.size .. self.size + items.len], items) |*d, s| {
-                d.* = s;
-            }
-            return .{
-                .buffer = buffer,
-                .size = self.size + @as(Idx, @intCast(items.len)),
-            };
+            var b = self.as_builder();
+            b.push_slice_mut(items);
+            return b.frozen();
         }
 
         pub fn replace(self: *const Self, target: Idx, item: T) Self {
-            var buffer = @as([capacity]T, undefined);
-            for (self.slice(), buffer[0..self.size], 0..) |s, *d, i| {
-                d.* = if (target == i)
-                    item
-                else
-                    s;
-            }
-            return .{
-                .buffer = buffer,
-                .size = self.size,
-            };
+            var b = self.as_builder();
+            b.replace(target, item);
+            return b.frozen();
         }
+
+        pub fn as_builder(self: Self) Builder {
+            var b = Builder{};
+            b.push_slice_mut(self.slice());
+            return b;
+        }
+
+        pub const Builder = struct {
+            b: Self = .{},
+
+            pub fn frozen(builder: Builder) Self {
+                return builder.b;
+            }
+
+            pub fn slice_mut(builder: *Builder) []T {
+                return builder.b.buffer[0..builder.b.size];
+            }
+
+            pub fn push_mut(builder: *Builder, item: T) void {
+                return builder.push_slice_mut(&.{item});
+            }
+
+            pub fn push_slice_mut(builder: *Builder, items: []const T) void {
+                std.debug.assert(builder.b.size + items.len < capacity);
+                const buffer = builder.b.buffer[builder.b.size..];
+                for (buffer[0..items.len], items) |*d, s| {
+                    d.* = s;
+                }
+                builder.b.size += @intCast(items.len);
+            }
+
+            pub fn replace(builder: *Builder, target: Idx, item: T) void {
+                std.debug.assert(target < builder.b.size);
+                builder.b.buffer[target] = item;
+            }
+        };
     };
 }
