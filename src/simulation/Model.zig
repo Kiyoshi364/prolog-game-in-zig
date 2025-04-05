@@ -1,50 +1,40 @@
 const std = @import("std");
 
+const utils = @import("utils");
+
 const Model = @This();
 
-pieces_buffer: [constants.max_pieces]Piece = .{undefined} ** constants.max_pieces,
-pieces_size: usize = 0,
+pieces: utils.Buffer(Piece, constants.PiecesSize, constants.max_pieces) = .{},
 
 pub fn step(model: Model, model_input: ModelInput, config: Config, out_model: *Model) ?AnimationInput {
     return switch (model_input) {
         .move => |move| blk: {
-            const piece_idx = for (model.pieces(), 0..) |p, i| {
+            const piece_idx: constants.PiecesSize = for (model.pieces.slice(), 0..) |p, i| {
                 if (std.meta.eql(move.piece, p)) {
-                    break i;
+                    break @intCast(i);
                 }
             } else break :blk null;
+            const p = model.pieces.get(piece_idx);
 
             const new_pos = move.piece.pos.move_many(
                 move.path,
                 config.map.bounds,
             ) orelse break :blk null;
 
-            out_model.*.pieces_size = model.pieces_size;
-            for (model.pieces(), out_model.pieces_mut(), 0..) |p, *out_p, i| {
-                out_p.* = if (piece_idx == i)
-                    // p.moved_to(new_pos)
-                    .{ .pos = new_pos, .kind = p.kind }
-                else
-                    p;
-            }
-
+            out_model.*.pieces = model.pieces.replace(
+                piece_idx,
+                .{ .pos = new_pos, .kind = p.kind },
+            );
             break :blk .none;
         },
     };
-}
-
-pub fn pieces_mut(model: *Model) []Piece {
-    return model.pieces_buffer[0..model.pieces_size];
-}
-pub fn pieces(model: *const Model) []const Piece {
-    return model.pieces_buffer[0..model.pieces_size];
 }
 
 pub const Config = struct {
     map: MapConfig = .{},
 
     pub const MapConfig = struct {
-        map_buffer: [constants.max_map_storage]Tile = .{undefined} ** constants.max_map_storage,
+        map_buffer: [constants.max_map_storage]Tile = undefined,
         bounds: Position = .{ .y = 0, .x = 0 },
 
         pub fn check(c: MapConfig) bool {
@@ -172,5 +162,6 @@ pub const Piece = struct {
 
 pub const constants = struct {
     pub const max_map_storage = 256;
-    const max_pieces = 128;
+    pub const max_pieces = 128;
+    pub const PiecesSize = u8;
 };

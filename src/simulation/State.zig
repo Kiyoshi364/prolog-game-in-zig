@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const utils = @import("utils");
+
 const Model = @import("Model.zig");
 
 model: Model = .{},
@@ -17,7 +19,7 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
 
     const animation_input = if (cursor1.handle_button(
         state_input.button,
-        state.model.pieces(),
+        state.model.pieces.slice(),
         &out_state.cursor,
     )) |model_input|
         state.model.step(model_input, model_config, &out_state.model) orelse return null
@@ -46,7 +48,7 @@ pub const StateInput = struct {
 };
 
 const constants = struct {
-    const max_path = 16;
+    const max_path = 15;
     const PathSize = u4;
 };
 
@@ -65,13 +67,7 @@ pub const Cursor = struct {
         const PieceSelection = struct {
             old_pos: Model.Position,
             piece: Model.Piece,
-            path_buffer: [constants.max_path]Model.Direction = .{undefined} ** constants.max_path,
-            path_size: constants.PathSize = 0,
-
-            pub fn path(selection: *const PieceSelection) []const Model.Direction {
-                const p = selection.path_buffer[0..selection.path_size];
-                return p;
-            }
+            path: utils.Buffer(Model.Direction, constants.PathSize, constants.max_path) = .{},
         };
 
         // const MenuSelection = struct {};
@@ -80,16 +76,14 @@ pub const Cursor = struct {
             return switch (selection) {
                 .none => .none,
                 .piece => |piece| blk: {
-                    var new_piece = piece;
-                    new_piece.path_buffer[new_piece.path_size] = dir;
-                    new_piece.path_size += 1;
+                    var new_path = piece.path.push(dir);
                     { // shrink_path
                         var x = @as(isize, 0);
                         var y = @as(isize, 0);
-                        const old_path_size = new_piece.path_size;
+                        const old_path_size = new_path.size;
                         for (0..old_path_size) |pre_i| {
-                            const i = old_path_size - pre_i - 1;
-                            const dir_ = new_piece.path_buffer[i];
+                            const i: constants.PathSize = @intCast(old_path_size - pre_i - 1);
+                            const dir_ = new_path.get(i);
                             switch (dir_) {
                                 .up => y += 1,
                                 .right => x += -1,
@@ -97,11 +91,15 @@ pub const Cursor = struct {
                                 .left => x += 1,
                             }
                             if (x == 0 and y == 0) {
-                                new_piece.path_size = @intCast(i);
+                                new_path.size = i;
                             }
                         }
                     }
-                    break :blk .{ .piece = new_piece };
+                    break :blk .{ .piece = .{
+                        .old_pos = piece.old_pos,
+                        .piece = piece.piece,
+                        .path = new_path,
+                    } };
                 },
             };
         }
@@ -127,7 +125,7 @@ pub const Cursor = struct {
                     out_cursor.* = .{ .pos = pos, .selection = .none };
                     break :blk .{ .move = .{
                         .piece = piece.piece,
-                        .path = piece.path(),
+                        .path = piece.path.slice(),
                     } };
                 },
             };

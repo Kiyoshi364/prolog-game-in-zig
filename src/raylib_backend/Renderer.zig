@@ -20,7 +20,7 @@ pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) 
     raylib.ClearBackground(raylib.LIGHTGRAY);
 
     renderer.draw_map(&model_config.map);
-    renderer.draw_pieces_anims(state.model.pieces(), &.{{}});
+    renderer.draw_pieces_anims(state.model.pieces.slice(), &.{{}});
     renderer.draw_cursor(state.cursor);
 }
 
@@ -226,7 +226,7 @@ fn draw_cursor(renderer: RaylibRenderer, cursor: State.Cursor) void {
 
     switch (cursor.selection) {
         .none => {},
-        .piece => |piece| renderer.path.draw_path(renderer.tile, t, piece.path()),
+        .piece => |piece| renderer.path.draw_path(renderer.tile, t, piece.path.slice()),
     }
 
     renderer.cursor.draw_cursor_rect(renderer.tile, t, cursor_color);

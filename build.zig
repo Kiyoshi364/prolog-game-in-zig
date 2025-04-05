@@ -10,17 +10,25 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const utils_mod = b.createModule(.{
+        .root_source_file = b.path("src/utils.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const sim_mod = b.createModule(.{
         .root_source_file = b.path("src/simulation/sim.zig"),
         .target = target,
         .optimize = optimize,
     });
+    sim_mod.addImport("utils", utils_mod);
 
     const backend_mod = b.createModule(.{
         .root_source_file = b.path("src/raylib_backend.zig"),
         .target = target,
         .optimize = optimize,
     });
+    backend_mod.addImport("utils", utils_mod);
     backend_mod.addImport("simulation", sim_mod);
     backend_mod.linkLibrary(raylib_dep.artifact("raylib"));
 
