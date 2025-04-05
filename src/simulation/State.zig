@@ -104,7 +104,7 @@ pub const Cursor = struct {
             };
         }
 
-        fn handle_ok(selection: *const Selection, pos: Model.Position, pieces: []const Model.Piece, out_cursor: *Cursor) ?Model.ModelInput {
+        fn handle_ok(selection: *const Selection, pos: Model.Position, pieces: []const Model.Piece, out_cursor: *Cursor) ?Model.Input {
             return switch (selection.*) {
                 .none => blk: {
                     const find_piece = for (pieces) |piece| {
@@ -131,7 +131,7 @@ pub const Cursor = struct {
             };
         }
 
-        fn handle_back(selection: Selection, pos: Model.Position, out_cursor: *Cursor) ?Model.ModelInput {
+        fn handle_back(selection: Selection, pos: Model.Position, out_cursor: *Cursor) ?Model.Input {
             switch (selection) {
                 .none => out_cursor.* = .{
                     .pos = pos,
@@ -168,7 +168,7 @@ pub const Cursor = struct {
         return if (moved) cursor0 else null;
     }
 
-    fn handle_button(cursor: *const Cursor, button: ?StateInput.Button, pieces: []const Model.Piece, out_cursor: *Cursor) ?Model.ModelInput {
+    fn handle_button(cursor: *const Cursor, button: ?StateInput.Button, pieces: []const Model.Piece, out_cursor: *Cursor) ?Model.Input {
         return if (button) |b|
             switch (b) {
                 .ok => cursor.selection.handle_ok(cursor.pos, pieces, out_cursor),

@@ -6,7 +6,7 @@ const Model = @This();
 
 pieces: utils.Buffer(Piece, constants.PiecesSize, constants.max_pieces) = .{},
 
-pub fn step(model: Model, model_input: ModelInput, config: Config, out_model: *Model) ?AnimationInput {
+pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model) ?AnimationInput {
     return switch (model_input) {
         .move => |move| blk: {
             const piece_idx: constants.PiecesSize = for (model.pieces.slice(), 0..) |p, i| {
@@ -74,7 +74,7 @@ pub const Config = struct {
     };
 };
 
-pub const ModelInput = union(enum) {
+pub const Input = union(enum) {
     move: Move,
 
     pub const Move = struct {
