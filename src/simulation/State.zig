@@ -94,16 +94,18 @@ pub const Cursor = struct {
 
         // const MenuSelection = struct {};
 
-        fn moved(selection: Selection, dir: Model.Direction) Selection {
+        fn moved(selection: Selection, dir: Model.Direction) ?Selection {
             return switch (selection) {
                 .none => .none,
                 .piece => |piece| blk: {
-                    var new_path = piece.path.push(dir);
-                    { // shrink_path
-                        var x = @as(isize, 0);
-                        var y = @as(isize, 0);
+                    var new_path = piece.path;
+                    const shrinked = blk2: { // shrink_path
+                        const a = dir.toAddData();
+                        var x = @as(isize, a.x * if (a.adds) -1 else @as(isize, 1));
+                        var y = @as(isize, a.y * if (a.adds) -1 else @as(isize, 1));
+                        var shrinked = false;
                         const old_path_size = new_path.size;
-                        for (0..old_path_size) |pre_i| {
+                        break :blk2 for (0..old_path_size) |pre_i| {
                             const i: constants.PathSize = @intCast(old_path_size - pre_i - 1);
                             const dir_ = new_path.get(i);
                             switch (dir_) {
@@ -114,14 +116,24 @@ pub const Cursor = struct {
                             }
                             if (x == 0 and y == 0) {
                                 new_path.size = i;
+                                shrinked = true;
                             }
-                        }
-                    }
-                    break :blk .{ .piece = .{
-                        .old_pos = piece.old_pos,
-                        .piece = piece.piece,
-                        .path = new_path,
-                    } };
+                        } else shrinked;
+                    };
+                    break :blk if (shrinked)
+                        .{ .piece = .{
+                            .old_pos = piece.old_pos,
+                            .piece = piece.piece,
+                            .path = new_path,
+                        } }
+                    else if (new_path.opt_push(dir)) |new_path1|
+                        .{ .piece = .{
+                            .old_pos = piece.old_pos,
+                            .piece = piece.piece,
+                            .path = new_path1,
+                        } }
+                    else
+                        null;
                 },
             };
         }
@@ -170,7 +182,10 @@ pub const Cursor = struct {
 
     fn move(cursor: Cursor, dir: Model.Direction, bounds: Model.Position) ?Cursor {
         return if (cursor.pos.move(dir, bounds)) |pos|
-            .{ .pos = pos, .selection = cursor.selection.moved(dir) }
+            if (cursor.selection.moved(dir)) |selection|
+                .{ .pos = pos, .selection = selection }
+            else
+                null
         else
             null;
     }

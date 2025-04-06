@@ -22,6 +22,18 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
             return self.slice()[i];
         }
 
+        pub fn opt_push(self: *const Self, item: T) ?Self {
+            return self.opt_push_slice(&.{item});
+        }
+
+        pub fn opt_push_slice(self: *const Self, items: []const T) ?Self {
+            var b = self.as_builder();
+            return if (b.opt_push_slice_mut(items)) |v| blk: {
+                std.debug.assert(v == {});
+                break :blk b.frozen();
+            } else null;
+        }
+
         pub fn push(self: *const Self, item: T) Self {
             return self.push_slice(&.{item});
         }
@@ -53,6 +65,17 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
 
             pub fn slice_mut(builder: *Builder) []T {
                 return builder.b.buffer[0..builder.b.size];
+            }
+
+            pub fn opt_push_mut(builder: *Builder, item: T) ?void {
+                return builder.opt_push_slice_mut(&.{item});
+            }
+
+            pub fn opt_push_slice_mut(builder: *Builder, items: []const T) ?void {
+                return if (builder.b.size + items.len < capacity)
+                    builder.push_slice_mut(items)
+                else
+                    null;
             }
 
             pub fn push_mut(builder: *Builder, item: T) void {
