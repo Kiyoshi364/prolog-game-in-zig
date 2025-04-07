@@ -11,6 +11,7 @@ pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model)
     std.debug.assert(model.check());
     return switch (model_input) {
         .move => |move| blk: {
+            // TODO: consume energy
             const piece_idx = move.piece.find_insorted(model.pieces.slice()) orelse break :blk null;
             const p = model.pieces.get(piece_idx);
 
@@ -54,6 +55,7 @@ pub fn check(model: Model) bool {
 
 pub const Config = struct {
     map: MapConfig = .{},
+    piece: PieceConfig = .{},
 
     pub const MapConfig = struct {
         map_buffer: [constants.max_map_storage]Tile = undefined,
@@ -94,10 +96,18 @@ pub const Config = struct {
     pub const Tile = enum {
         empty,
     };
+
+    pub const PieceConfig = struct {
+        starting_energies: [Piece.Kind.count]constants.Energy = std.enums.directEnumArray(Piece.Kind, constants.Energy, 0, .{
+            .capitan = 2,
+            .minion = 1,
+        }),
+    };
 };
 
 pub const Input = union(enum) {
     move: Move,
+    // TODO: add EndOfTurn
 
     pub const Move = struct {
         piece: Piece,
@@ -186,6 +196,7 @@ pub const Piece = struct {
     id: constants.PieceID = 0,
     pos: Position,
     kind: Kind,
+    energy: constants.Energy = 0,
 
     pub const Kind = enum {
         capitan,
@@ -193,6 +204,12 @@ pub const Piece = struct {
 
         pub const count: comptime_int = @typeInfo(@This()).@"enum".fields.len;
     };
+
+    pub fn refresh(piece: Piece, pconfig: Model.Config.PieceConfig) Piece {
+        var new_piece = piece;
+        new_piece.energy = pconfig.starting_energies[@intFromEnum(piece.kind)];
+        return new_piece;
+    }
 
     pub fn find_insorted(piece: Piece, pieces: []const Piece) ?constants.PiecesSize {
         var min = @as(constants.PiecesSize, 0);
@@ -227,4 +244,6 @@ pub const constants = struct {
     pub const PiecesSize = u8;
 
     pub const PieceID = u32;
+
+    pub const Energy = u3;
 };

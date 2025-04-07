@@ -44,6 +44,7 @@ pub fn main() !void {
         pieces.push_slice_mut(&init_pieces);
         for (pieces.slice_mut()) |*piece| {
             piece.*.id = state.model.genid_mut();
+            piece.* = piece.refresh(model_config.piece);
         }
         state.model.pieces = pieces.frozen();
         std.debug.assert(state.model.check());

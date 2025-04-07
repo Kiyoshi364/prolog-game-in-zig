@@ -20,7 +20,7 @@ pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) 
     raylib.ClearBackground(raylib.LIGHTGRAY);
 
     renderer.draw_map(&model_config.map);
-    renderer.draw_pieces_anims(state.model.pieces.slice(), state.anims.slice());
+    renderer.draw_pieces_anims(state.model.pieces.slice(), model_config.piece, state.anims.slice());
     renderer.draw_cursor(state.cursor);
 }
 
@@ -65,12 +65,12 @@ pub const Piece = struct {
         .minion = 6,
     }),
 
-    fn draw_piece(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece) void {
+    fn draw_piece(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece, pconfig: Model.Config.PieceConfig) void {
         const t = rtile.translate_tile_to_screen(piece.pos.x, piece.pos.y);
-        rpiece.draw_piece_at(rtile, piece, t);
+        rpiece.draw_piece_at(rtile, piece, pconfig, t);
     }
 
-    fn draw_piece_anim(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece, anim: State.Animation) void {
+    fn draw_piece_anim(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece, pconfig: Model.Config.PieceConfig, anim: State.Animation) void {
         const t = @as(ScreenPos, switch (anim.state) {
             .move => |move| blk: {
                 const a = move.path.get(move.path_idx).toAddData();
@@ -89,10 +89,10 @@ pub const Piece = struct {
                     .{ .x = t0.x - @as(c_int, ax), .y = t0.y - @as(c_int, ay) };
             },
         });
-        rpiece.draw_piece_at(rtile, piece, t);
+        rpiece.draw_piece_at(rtile, piece, pconfig, t);
     }
 
-    fn draw_piece_at(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece, t: ScreenPos) void {
+    fn draw_piece_at(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece, pconfig: Model.Config.PieceConfig, t: ScreenPos) void {
         const piece_factor_size = rpiece.kinds_factor_size[@intFromEnum(piece.kind)];
         const piece_div_size = rpiece.kinds_div_size[@intFromEnum(piece.kind)];
         const piece_size = rtile.size * piece_factor_size / piece_div_size;
@@ -121,6 +121,43 @@ pub const Piece = struct {
                     rpiece.outline_color,
                 );
             },
+        }
+
+        {
+            // TODO: extract constants to config
+            const radius = rtile.size * 1 / 16;
+            const max_energy = pconfig.starting_energies[@intFromEnum(piece.kind)];
+            const energy_used_frac = 5;
+            const energy_used_div = 8;
+
+            const leftover_space = rtile.size - (2 * radius * max_energy);
+            // TODO: inline calculations in loop to avoid truncation
+            // TODO: better centering math
+            const pad = leftover_space / (max_energy + 3);
+            const step = pad + 2 * radius;
+
+            for (0..max_energy) |i| {
+                const is_energy_used = i < piece.energy;
+                const color = if (is_energy_used)
+                    rpiece.color
+                else
+                    raylib.Color{
+                        .r = @intCast(@as(u16, rpiece.color.r) * energy_used_frac / energy_used_div),
+                        .g = @intCast(@as(u16, rpiece.color.g) * energy_used_frac / energy_used_div),
+                        .b = @intCast(@as(u16, rpiece.color.b) * energy_used_frac / energy_used_div),
+                        .a = 0xFF,
+                    };
+                const outline_color = if (is_energy_used) rpiece.outline_color else raylib.Color{ .a = 0 };
+
+                draw_circ_outline(
+                    t.x + rtile.pad + 2 * pad + step * @as(c_int, @intCast(i)),
+                    t.y + rtile.size - 2 * radius,
+                    @floatFromInt(radius),
+                    color,
+                    1,
+                    outline_color,
+                );
+            }
         }
     }
 };
@@ -235,16 +272,16 @@ fn draw_map(renderer: RaylibRenderer, map: *const Model.Config.MapConfig) void {
     }
 }
 
-fn draw_pieces_anims(renderer: RaylibRenderer, pieces: []const Model.Piece, anims: []const State.Animation) void {
+fn draw_pieces_anims(renderer: RaylibRenderer, pieces: []const Model.Piece, pconfig: Model.Config.PieceConfig, anims: []const State.Animation) void {
     var anim_idx = @as(Model.constants.PiecesSize, 0);
     for (pieces) |piece| {
         if (anim_idx < anims.len and piece.id == anims[anim_idx].piece_id) {
             const anim = anims[anim_idx];
-            renderer.piece.draw_piece_anim(renderer.tile, piece, anim);
+            renderer.piece.draw_piece_anim(renderer.tile, piece, pconfig, anim);
             anim_idx += 1;
         } else {
             std.debug.assert(anims.len <= anim_idx or piece.id < anims[anim_idx].piece_id);
-            renderer.piece.draw_piece(renderer.tile, piece);
+            renderer.piece.draw_piece(renderer.tile, piece, pconfig);
         }
     }
 }
