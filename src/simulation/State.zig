@@ -350,3 +350,7 @@ fn tick_anims(state: State) Animations {
     }
     return buffer.frozen();
 }
+
+test "State.refAllDeclsRecursive" {
+    std.testing.refAllDeclsRecursive(@This());
+}

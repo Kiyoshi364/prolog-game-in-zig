@@ -160,3 +160,8 @@ test "LenSpliter preserves sum" {
         try std.testing.expectEqual(len, sum);
     }
 }
+
+test "utils.refAllDeclsRecursive" {
+    std.testing.refAllDeclsRecursive(Buffer(u8, u4, 10));
+    std.testing.refAllDeclsRecursive(LenSpliter(u8));
+}

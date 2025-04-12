@@ -247,3 +247,7 @@ pub const constants = struct {
 
     pub const Energy = u3;
 };
+
+test "Model.refAllDeclsRecursive" {
+    std.testing.refAllDeclsRecursive(@This());
+}
