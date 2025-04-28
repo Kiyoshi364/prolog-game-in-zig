@@ -26,8 +26,13 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
         state.model.pieces.slice(),
         &out_state.cursor,
     )) |model_input| {
-        const anim_input = state.model.step(model_input, model_config, &out_state.model) orelse return null;
-        out_state.anims = state.update_animations(anim_input);
+        if (state.model.step(model_input, model_config, &out_state.model)) |anim_input| {
+            out_state.anims = state.update_animations(anim_input);
+        } else {
+            // TODO: log/notify invalid move
+            out_state.model = state.model;
+            out_state.anims = state.tick_anims();
+        }
     } else {
         out_state.model = state.model;
         out_state.anims = state.tick_anims();

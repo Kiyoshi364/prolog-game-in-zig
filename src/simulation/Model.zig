@@ -15,6 +15,12 @@ pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model)
             const piece_idx = move.piece.find_insorted(model.pieces.slice()) orelse break :blk null;
             const p = model.pieces.get(piece_idx);
 
+            if (0 < p.energy) {
+                // Ok
+            } else {
+                return null;
+            }
+
             const new_pos = move.piece.pos.move_many(
                 move.path,
                 config.map.bounds,
@@ -22,7 +28,12 @@ pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model)
 
             out_model.*.pieces = model.pieces.replace(
                 piece_idx,
-                .{ .pos = new_pos, .kind = p.kind, .id = p.id },
+                .{
+                    .pos = new_pos,
+                    .kind = p.kind,
+                    .id = p.id,
+                    .energy = p.energy - 1,
+                },
             );
             std.debug.assert(out_model.check());
             break :blk .{ .move = .{ .piece = move.piece, .path = move.path } };
