@@ -3,10 +3,6 @@ const std = @import("std");
 const simulation = @import("simulation");
 const backend = @import("backend");
 
-const raylib = @cImport({
-    @cInclude("raylib.h");
-});
-
 const Model = simulation.Model;
 const State = simulation.State;
 
@@ -54,11 +50,15 @@ pub fn main() !void {
 
     var renderer = Renderer{};
 
-    raylib.InitWindow(800, 600, "Zig Window");
-    raylib.SetTargetFPS(60);
-    defer raylib.CloseWindow();
+    var window = backend.Window{
+        .width = 800,
+        .height = 600,
+        .title = "Zig Window",
+    };
+    window.open();
+    defer window.close();
 
-    while (!raylib.WindowShouldClose()) : ({
+    while (!window.should_close()) : ({
         inputer = inputer_;
         state = state_;
     }) {
@@ -66,10 +66,6 @@ pub fn main() !void {
 
         state_ = state.step(state_input, model_config) orelse unreachable;
 
-        raylib.BeginDrawing();
-
         renderer.draw(state_, model_config);
-
-        raylib.EndDrawing();
     }
 }

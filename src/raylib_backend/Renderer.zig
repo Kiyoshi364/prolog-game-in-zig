@@ -17,11 +17,15 @@ path: Path = .{},
 const RaylibRenderer = @This();
 
 pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) void {
+    raylib.BeginDrawing();
+
     raylib.ClearBackground(raylib.LIGHTGRAY);
 
     renderer.draw_map(&model_config.map);
     renderer.draw_pieces_anims(state.model.pieces.slice(), model_config.piece, state.anims.slice());
     renderer.draw_cursor(state.cursor);
+
+    raylib.EndDrawing();
 }
 
 const ScreenPos = struct { x: c_int, y: c_int };
