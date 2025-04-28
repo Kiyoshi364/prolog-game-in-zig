@@ -53,7 +53,6 @@ pub fn build(b: *std.Build) void {
         .name = "zig_game",
         .root_module = exe_mod,
     });
-    exe.linkLibrary(raylib_dep.artifact("raylib"));
 
     b.installArtifact(exe);
 
