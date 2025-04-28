@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const simulation = @import("simulation");
+const utils = @import("utils");
 
 const Model = simulation.Model;
 const State = simulation.State;
@@ -130,16 +131,21 @@ pub const Piece = struct {
         {
             // TODO: extract constants to config
             const radius = rtile.size * 1 / 16;
-            const max_energy = pconfig.starting_energies[@intFromEnum(piece.kind)];
+            const max_energy = @max(
+                pconfig.starting_energies[@intFromEnum(piece.kind)],
+                piece.energy,
+            );
             const energy_used_frac = 5;
             const energy_used_div = 8;
 
-            const leftover_space = rtile.size - (2 * radius * max_energy);
-            // TODO: inline calculations in loop to avoid truncation
-            // TODO: better centering math
-            const pad = leftover_space / (max_energy + 3);
-            const step = pad + 2 * radius;
+            var x = t.x;
+            const splits = 2 * @as(c_int, max_energy) + 1 + 2;
 
+            var it = utils.LenSpliter(c_int).init_iterator(rtile.size, splits);
+            // Note: start Pad
+            x += it.next().?;
+            // Note: first inner Pad
+            x += it.next().?;
             for (0..max_energy) |i| {
                 const is_energy_used = i < piece.energy;
                 const color = if (is_energy_used)
@@ -153,15 +159,24 @@ pub const Piece = struct {
                     };
                 const outline_color = if (is_energy_used) rpiece.outline_color else raylib.Color{ .a = 0 };
 
-                draw_circ_outline(
-                    t.x + rtile.pad + 2 * pad + step * @as(c_int, @intCast(i)),
-                    t.y + rtile.size - 2 * radius,
-                    @floatFromInt(radius),
-                    color,
-                    1,
-                    outline_color,
-                );
+                {
+                    const step = it.next().?;
+                    draw_circ_outline(
+                        x + step / 2,
+                        t.y + rtile.size - 2 * radius,
+                        @floatFromInt(radius),
+                        color,
+                        1,
+                        outline_color,
+                    );
+                    x += step;
+                }
+                // Note: inner Pad
+                x += it.next().?;
             }
+            // Note: end pad
+            x += it.next().?;
+            std.debug.assert(it.next() == null);
         }
     }
 };
