@@ -11,7 +11,6 @@ pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model)
     std.debug.assert(model.check());
     return switch (model_input) {
         .move => |move| blk: {
-            // TODO: consume energy
             const piece_idx = move.piece.find_insorted(model.pieces.slice()) orelse break :blk null;
             const p = model.pieces.get(piece_idx);
 
