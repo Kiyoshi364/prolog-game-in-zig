@@ -9,6 +9,10 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
 
         const Self = @This();
 
+        pub fn to_buffer(buffer: [capacity]T, size: Idx) Self {
+            return .{ .buffer = buffer, .size = size };
+        }
+
         pub fn len(self: Self) Idx {
             _ = self;
             return capacity;
@@ -51,9 +55,7 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
         }
 
         pub fn as_builder(self: Self) Builder {
-            var b = Builder{};
-            b.push_slice_mut(self.slice());
-            return b;
+            return .{ .b = self };
         }
 
         pub const Builder = struct {
@@ -72,7 +74,7 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
             }
 
             pub fn opt_push_slice_mut(builder: *Builder, items: []const T) ?void {
-                return if (builder.b.size + items.len < capacity)
+                return if (builder.b.size + items.len <= capacity)
                     builder.push_slice_mut(items)
                 else
                     null;
@@ -83,7 +85,7 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
             }
 
             pub fn push_slice_mut(builder: *Builder, items: []const T) void {
-                std.debug.assert(builder.b.size + items.len < capacity);
+                std.debug.assert(builder.b.size + items.len <= capacity);
                 const buffer = builder.b.buffer[builder.b.size..];
                 for (buffer[0..items.len], items) |*d, s| {
                     d.* = s;
