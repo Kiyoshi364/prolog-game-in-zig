@@ -4,7 +4,8 @@ const utils = @import("utils");
 
 const Model = @import("Model.zig");
 
-model: Model = .{},
+model_idx: constants.ModelStorage = 0,
+model_tree: constants.ModelTree = constants.ModelTree.with_root(.{}),
 cursor: Cursor = .{},
 anims: Animations = .{},
 
@@ -21,25 +22,53 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
         model_config.map.bounds,
     ) orelse state.cursor;
 
+    const model = state.get_model();
     if (cursor1.handle_button(
         state_input.button,
-        state.model.pieces.slice(),
+        model.pieces.slice(),
         &out_state.cursor,
     )) |model_input| {
-        if (state.model.step(model_input, model_config, &out_state.model)) |anim_input| {
+        var model_tree = @as(constants.ModelTree, undefined);
+        const input_idx = if (state.model_tree.find_input_or_register(model_input)) |reg_input| blk: {
+            model_tree = reg_input.self;
+            break :blk reg_input.idx;
+        } else {
+            out_state.model_idx = state.model_idx;
+            out_state.model_tree = state.model_tree;
+            out_state.anims = state.tick_anims();
+            return out_state;
+        };
+        var out_model = @as(Model, undefined);
+        if (model.step(model_input, model_config, &out_model)) |anim_input| {
+            if (model_tree.register_state(out_model, .{ .input = input_idx, .state = state.model_idx })) |reg_state| {
+                out_state.model_idx = reg_state.idx;
+                out_state.model_tree = reg_state.self;
+            } else {
+                unreachable;
+            }
             out_state.anims = state.update_animations(anim_input);
         } else {
             // TODO: log/notify invalid move
-            out_state.model = state.model;
+            out_state.model_idx = state.model_idx;
+            out_state.model_tree = state.model_tree;
             out_state.anims = state.tick_anims();
         }
     } else {
-        out_state.model = state.model;
+        out_state.model_idx = state.model_idx;
+        out_state.model_tree = state.model_tree;
         out_state.anims = state.tick_anims();
     }
 
     std.debug.assert(out_state.check());
     return out_state;
+}
+
+pub fn get_model(state: State) Model {
+    return state.model_tree.state_slice()[state.model_idx];
+}
+
+pub fn get_model_mut(state: *State) *Model {
+    return &state.model_tree.state_buffer.buffer[state.model_idx];
 }
 
 pub fn check(state: State) bool {
@@ -77,6 +106,12 @@ pub const constants = struct {
     const PathSize = u4;
 
     pub const animation_start_timer = 20;
+
+    const max_model_depth = 4;
+    const ModelDepth = u4;
+    const max_model_storage = 31;
+    const ModelStorage = u5;
+    const ModelTree = utils.UptreeWithBuffer(Model, Model.Input, constants.max_model_storage, constants.max_model_storage);
 };
 
 pub const Cursor = struct {

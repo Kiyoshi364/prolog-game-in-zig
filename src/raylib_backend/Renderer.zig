@@ -22,8 +22,9 @@ pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) 
 
     raylib.ClearBackground(raylib.LIGHTGRAY);
 
+    const model = state.get_model();
     renderer.draw_map(&model_config.map);
-    renderer.draw_pieces_anims(state.model.pieces.slice(), model_config.piece, state.anims.slice());
+    renderer.draw_pieces_anims(model.pieces.slice(), model_config.piece, state.anims.slice());
     renderer.draw_cursor(state.cursor);
 
     raylib.EndDrawing();

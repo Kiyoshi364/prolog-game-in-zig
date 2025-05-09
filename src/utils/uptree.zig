@@ -58,6 +58,8 @@ pub fn UptreeWithBuffer(
     comptime state_cap: comptime_int,
     comptime input_cap: comptime_int,
 ) type {
+    std.debug.assert(0 < state_cap);
+    std.debug.assert(0 < input_cap);
     return struct {
         state_buffer: StateBuffer,
         input_buffer: InputBuffer,
@@ -80,6 +82,11 @@ pub fn UptreeWithBuffer(
             .parent_states = undefined,
             .parent_inputs = undefined,
         };
+
+        pub fn with_root(state: State) Self {
+            const self = Self.empty;
+            return self.register_state(state, null).?.self;
+        }
 
         pub fn input_slice(self: *const Self) []const Input {
             return self.input_buffer.slice();

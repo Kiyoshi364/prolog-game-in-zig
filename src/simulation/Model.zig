@@ -34,6 +34,7 @@ pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model)
                     .energy = p.energy - 1,
                 },
             );
+            out_model.piece_genid = model.piece_genid;
             std.debug.assert(out_model.check());
             break :blk .{ .move = .{ .piece = move.piece, .path = move.path } };
         },
