@@ -113,7 +113,7 @@ pub fn UptreeWithBuffer(
                 null;
         }
 
-        const CompareInputFn = fn(Input, Input) bool;
+        const CompareInputFn = fn (Input, Input) bool;
         fn input_eql(a: Input, b: Input) bool {
             return std.meta.eql(a, b);
         }
@@ -155,8 +155,7 @@ pub fn UptreeWithBuffer(
             const parent = @as(InnerParent, if (opt_parent) |parent| blk: {
                 std.debug.assert(parent.input < self.input_buffer.size);
                 break :blk .{ .input = parent.input, .state = parent.state };
-            } else
-                .{ .input = null, .state = idx });
+            } else .{ .input = null, .state = idx });
 
             return if (self.state_buffer.opt_push(state)) |sbuf|
                 .{
@@ -176,7 +175,7 @@ pub fn UptreeWithBuffer(
             return self.find_state_compare(state, state_eql);
         }
 
-        const CompareStateFn = fn(State, State) bool;
+        const CompareStateFn = fn (State, State) bool;
         fn state_eql(a: State, b: State) bool {
             return std.meta.eql(a, b);
         }
@@ -217,17 +216,19 @@ test "UptreeWithBuffer" {
     { // Registering Inputs
         const s = struct {
             fn input_true(a: Input, b: Input) bool {
-                _ = a; _ = b;
+                _ = a;
+                _ = b;
                 return true;
             }
             fn input_false(a: Input, b: Input) bool {
-                _ = a; _ = b;
+                _ = a;
+                _ = b;
                 return false;
             }
         };
         const input_factor = @as(i8, -3);
 
-        for (0..input_cap-1) |i| {
+        for (0..input_cap - 1) |i| {
             const input = input_factor * @as(i8, @intCast(i));
             const reg_input = tree.register_input(input).?;
             try std.testing.expectEqual(i, reg_input.idx);
@@ -236,7 +237,7 @@ test "UptreeWithBuffer" {
         }
         try std.testing.expectEqualSlices(
             i8,
-            &.{0, -3, -6, -9, -12, -15, -18, -21, -24, -27, -30, -33, -36, -39, -42, -45, -48, -51, -54},
+            &.{ 0, -3, -6, -9, -12, -15, -18, -21, -24, -27, -30, -33, -36, -39, -42, -45, -48, -51, -54 },
             tree.input_slice(),
         );
 
@@ -267,11 +268,13 @@ test "UptreeWithBuffer" {
     { // Registering States
         const s = struct {
             fn state_true(a: State, b: State) bool {
-                _ = a; _ = b;
+                _ = a;
+                _ = b;
                 return true;
             }
             fn state_false(a: State, b: State) bool {
-                _ = a; _ = b;
+                _ = a;
+                _ = b;
                 return false;
             }
         };
@@ -280,17 +283,16 @@ test "UptreeWithBuffer" {
         for (0..state_cap) |i| {
             const state = state_factor * @as(u8, @intCast(i));
             const reg_state = tree.register_state(state, if (i == 0)
-                    null
-                else
-                    .{ .input = @intCast(state % input_cap), .state = @intCast(i/2) }
-            ).?;
+                null
+            else
+                .{ .input = @intCast(state % input_cap), .state = @intCast(i / 2) }).?;
             try std.testing.expectEqual(i, reg_state.idx);
             try std.testing.expectEqual(state, reg_state.self.get_state(reg_state.idx));
             tree = reg_state.self;
         }
         try std.testing.expectEqualSlices(
             u8,
-            &.{0, 5, 10, 15, 20, 25, 30, 35, 40, 45},
+            &.{ 0, 5, 10, 15, 20, 25, 30, 35, 40, 45 },
             tree.state_slice(),
         );
 
@@ -303,7 +305,7 @@ test "UptreeWithBuffer" {
 
     try std.testing.expectEqualSlices(
         Tree.StateIdx,
-        &.{0, 0, 1, 1, 2, 2, 3, 3, 4, 4},
+        &.{ 0, 0, 1, 1, 2, 2, 3, 3, 4, 4 },
         tree.parent_states_slice(),
     );
     try std.testing.expectEqual(0, tree.get_parent_state(0));
@@ -312,7 +314,7 @@ test "UptreeWithBuffer" {
 
     try std.testing.expectEqualSlices(
         ?Tree.InputIdx,
-        &.{null, 5, 10, 15, 0, 5, 10, 15, 0, 5},
+        &.{ null, 5, 10, 15, 0, 5, 10, 15, 0, 5 },
         tree.parent_inputs_slice(),
     );
     try std.testing.expectEqual(5, tree.get_parent_input(1));
