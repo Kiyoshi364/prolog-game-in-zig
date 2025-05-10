@@ -48,6 +48,7 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
                 out_state.model_tree = reg_state.self;
                 out_state.time_cursor.model_idx = reg_state.idx;
             } else {
+                // TODO
                 unreachable;
             }
             out_state.anims = state.update_animations(anim_input);
@@ -218,6 +219,7 @@ pub const MapCursor = struct {
         }
 
         fn moved_control(selection: Selection, dir: Model.Direction) ?Selection {
+            // TODO
             _ = dir;
             return switch (selection) {
                 .none => unreachable,
@@ -226,6 +228,7 @@ pub const MapCursor = struct {
         }
 
         fn handle_ok(selection: *const Selection, mod: StateInput.Modifier, pos: Model.Position, pieces: []const Model.Piece, out_cursor: *MapCursor) ?Model.Input {
+            // TODO
             std.debug.assert(mod == .none);
             return switch (selection.*) {
                 .none => blk: {
@@ -254,6 +257,7 @@ pub const MapCursor = struct {
         }
 
         fn handle_back(selection: Selection, mod: StateInput.Modifier, pos: Model.Position, out_cursor: *MapCursor) ?Model.Input {
+            // TODO
             std.debug.assert(mod == .none);
             switch (selection) {
                 .none => out_cursor.* = .{
