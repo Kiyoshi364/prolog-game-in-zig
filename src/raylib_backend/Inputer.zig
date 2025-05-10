@@ -5,6 +5,7 @@ const simulation = @import("simulation");
 const StateInput = simulation.State.StateInput;
 
 const Direction = StateInput.Direction;
+const ModifierFlags = StateInput.ModifierFlags;
 const Button = StateInput.Button;
 
 const raylib = @cImport({
@@ -26,6 +27,9 @@ pub const Config = struct {
         .down = raylib.KEY_S,
         .left = raylib.KEY_A,
     }),
+    mod_keymap: [ModifierFlags.count]Key = std.enums.directEnumArray(ModifierFlags, Key, 0, .{
+        .control = raylib.KEY_LEFT_ALT,
+    }),
     button_keymap: [Button.count]Key = std.enums.directEnumArray(Button, Key, 0, .{
         .ok = raylib.KEY_J,
         .back = raylib.KEY_K,
@@ -45,6 +49,14 @@ pub fn get_input(
         break :blk dirs;
     };
 
+    const mods = blk: {
+        var mods = @as([ModifierFlags.count]bool, undefined);
+        for (config.mod_keymap, &mods) |key, *mod| {
+            mod.* = raylib.IsKeyDown(key);
+        }
+        break :blk mods;
+    };
+
     const button = blk: {
         var button = @as(?Button, null);
         for (config.button_keymap, inputer.button, &out_inputer.button, 0..) |key, in_timer, *out_timer, i| {
@@ -60,6 +72,7 @@ pub fn get_input(
 
     return .{
         .dirs = dirs,
+        .mods = mods,
         .button = button,
     };
 }

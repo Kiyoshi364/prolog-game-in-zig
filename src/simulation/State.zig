@@ -20,12 +20,14 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
     var out_state = @as(State, undefined);
 
     const map_cursor1 = state.map_cursor.move_dirs(
+        state_input.modifier(),
         state_input.dirs,
         model_config.map.bounds,
     ) orelse state.map_cursor;
 
     const model = state.get_model();
     if (map_cursor1.handle_button(
+        state_input.modifier(),
         state_input.button,
         model.pieces.slice(),
         &out_state.map_cursor,
@@ -92,15 +94,40 @@ pub fn check(state: State) bool {
 
 pub const StateInput = struct {
     dirs: [Model.Direction.count]bool,
+    mods: [ModifierFlags.count]bool,
     button: ?Button,
 
     pub const Direction = Model.Direction;
+    pub const ModifierFlags = enum(u1) {
+        control = 0,
+
+        pub const count: comptime_int = @typeInfo(@This()).@"enum".fields.len;
+    };
+    pub const Modifier = enum(u1) {
+        none = 0,
+        control = 1,
+
+        pub const count: comptime_int = @typeInfo(@This()).@"enum".fields.len;
+        const TagType = @typeInfo(@This()).@"enum".tag_type;
+
+        pub fn from_flags(mods: [ModifierFlags.count]bool) Modifier {
+            var imod = @as(TagType, 0);
+            for (mods, 0..) |mod_on, i| {
+                imod |= @as(TagType, @intFromBool(mod_on)) << @intCast(i);
+            }
+            return @enumFromInt(imod);
+        }
+    };
     pub const Button = enum {
         ok,
         back,
 
         pub const count: comptime_int = @typeInfo(@This()).@"enum".fields.len;
     };
+
+    pub fn modifier(state_input: StateInput) Modifier {
+        return Modifier.from_flags(state_input.mods);
+    }
 };
 
 pub const constants = struct {
@@ -190,7 +217,16 @@ pub const MapCursor = struct {
             };
         }
 
-        fn handle_ok(selection: *const Selection, pos: Model.Position, pieces: []const Model.Piece, out_cursor: *MapCursor) ?Model.Input {
+        fn moved_control(selection: Selection, dir: Model.Direction) ?Selection {
+            _ = dir;
+            return switch (selection) {
+                .none => unreachable,
+                .piece => |_| unreachable,
+            };
+        }
+
+        fn handle_ok(selection: *const Selection, mod: StateInput.Modifier, pos: Model.Position, pieces: []const Model.Piece, out_cursor: *MapCursor) ?Model.Input {
+            std.debug.assert(mod == .none);
             return switch (selection.*) {
                 .none => blk: {
                     const find_piece = for (pieces) |piece| {
@@ -217,7 +253,8 @@ pub const MapCursor = struct {
             };
         }
 
-        fn handle_back(selection: Selection, pos: Model.Position, out_cursor: *MapCursor) ?Model.Input {
+        fn handle_back(selection: Selection, mod: StateInput.Modifier, pos: Model.Position, out_cursor: *MapCursor) ?Model.Input {
+            std.debug.assert(mod == .none);
             switch (selection) {
                 .none => out_cursor.* = .{
                     .pos = pos,
@@ -232,23 +269,30 @@ pub const MapCursor = struct {
         }
     };
 
-    fn move(cursor: MapCursor, dir: Model.Direction, bounds: Model.Position) ?MapCursor {
-        return if (cursor.pos.move(dir, bounds)) |pos|
-            if (cursor.selection.moved(dir)) |selection|
-                .{ .pos = pos, .selection = selection }
+    fn move(cursor: MapCursor, dir: Model.Direction, mod: StateInput.Modifier, bounds: Model.Position) ?MapCursor {
+        return switch (mod) {
+            .none => if (cursor.pos.move(dir, bounds)) |pos|
+                if (cursor.selection.moved(dir)) |selection|
+                    .{ .pos = pos, .selection = selection }
+                else
+                    null
             else
-                null
-        else
-            null;
+                null,
+            // TODO
+            .control => if (cursor.selection.moved_control(dir)) |selection|
+                .{ .pos = cursor.pos, .selection = selection }
+            else
+                null,
+        };
     }
 
-    fn move_dirs(cursor: MapCursor, dirs: [Model.Direction.count]bool, bounds: Model.Position) ?MapCursor {
+    fn move_dirs(cursor: MapCursor, mod: StateInput.Modifier, dirs: [Model.Direction.count]bool, bounds: Model.Position) ?MapCursor {
         var cursor0 = cursor;
         var moved = false;
         for (dirs, 0..) |should_move, i| {
             if (should_move) {
                 const dir = @as(Model.Direction, @enumFromInt(i));
-                if (cursor0.move(dir, bounds)) |cursor1| {
+                if (cursor0.move(dir, mod, bounds)) |cursor1| {
                     cursor0 = cursor1;
                     moved = true;
                 }
@@ -257,11 +301,11 @@ pub const MapCursor = struct {
         return if (moved) cursor0 else null;
     }
 
-    fn handle_button(cursor: *const MapCursor, button: ?StateInput.Button, pieces: []const Model.Piece, out_cursor: *MapCursor) ?Model.Input {
+    fn handle_button(cursor: *const MapCursor, mod: StateInput.Modifier, button: ?StateInput.Button, pieces: []const Model.Piece, out_cursor: *MapCursor) ?Model.Input {
         return if (button) |b|
             switch (b) {
-                .ok => cursor.selection.handle_ok(cursor.pos, pieces, out_cursor),
-                .back => cursor.selection.handle_back(cursor.pos, out_cursor),
+                .ok => cursor.selection.handle_ok(mod, cursor.pos, pieces, out_cursor),
+                .back => cursor.selection.handle_back(mod, cursor.pos, out_cursor),
             }
         else blk: {
             out_cursor.* = cursor.*;
