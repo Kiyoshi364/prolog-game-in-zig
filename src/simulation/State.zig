@@ -4,9 +4,11 @@ const utils = @import("utils");
 
 const Model = @import("Model.zig");
 
-model_idx: constants.ModelStorage = 0,
+// TODO: move model_tree to TimeCursor
 model_tree: constants.ModelTree = constants.ModelTree.with_root(.{}),
-cursor: Cursor = .{},
+active_cursor: CursorTag = .map,
+map_cursor: MapCursor = MapCursor.empty,
+time_cursor: TimeCursor = TimeCursor.empty,
 anims: Animations = .{},
 
 const State = @This();
@@ -17,45 +19,45 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
     std.debug.assert(state.check());
     var out_state = @as(State, undefined);
 
-    const cursor1 = state.cursor.move_dirs(
+    const map_cursor1 = state.map_cursor.move_dirs(
         state_input.dirs,
         model_config.map.bounds,
-    ) orelse state.cursor;
+    ) orelse state.map_cursor;
 
     const model = state.get_model();
-    if (cursor1.handle_button(
+    if (map_cursor1.handle_button(
         state_input.button,
         model.pieces.slice(),
-        &out_state.cursor,
+        &out_state.map_cursor,
     )) |model_input| {
         var model_tree = @as(constants.ModelTree, undefined);
         const input_idx = if (state.model_tree.find_input_or_register(model_input)) |reg_input| blk: {
             model_tree = reg_input.self;
             break :blk reg_input.idx;
         } else {
-            out_state.model_idx = state.model_idx;
             out_state.model_tree = state.model_tree;
+            out_state.time_cursor = state.time_cursor;
             out_state.anims = state.tick_anims();
             return out_state;
         };
         var out_model = @as(Model, undefined);
         if (model.step(model_input, model_config, &out_model)) |anim_input| {
-            if (model_tree.register_state(out_model, .{ .input = input_idx, .state = state.model_idx })) |reg_state| {
-                out_state.model_idx = reg_state.idx;
+            if (model_tree.register_state(out_model, .{ .input = input_idx, .state = state.time_cursor.model_idx })) |reg_state| {
                 out_state.model_tree = reg_state.self;
+                out_state.time_cursor.model_idx = reg_state.idx;
             } else {
                 unreachable;
             }
             out_state.anims = state.update_animations(anim_input);
         } else {
             // TODO: log/notify invalid move
-            out_state.model_idx = state.model_idx;
             out_state.model_tree = state.model_tree;
+            out_state.time_cursor = state.time_cursor;
             out_state.anims = state.tick_anims();
         }
     } else {
-        out_state.model_idx = state.model_idx;
         out_state.model_tree = state.model_tree;
+        out_state.time_cursor = state.time_cursor;
         out_state.anims = state.tick_anims();
     }
 
@@ -64,11 +66,11 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
 }
 
 pub fn get_model(state: State) Model {
-    return state.model_tree.state_slice()[state.model_idx];
+    return state.model_tree.state_slice()[state.time_cursor.model_idx];
 }
 
 pub fn get_model_mut(state: *State) *Model {
-    return &state.model_tree.state_buffer.buffer[state.model_idx];
+    return &state.model_tree.state_buffer.buffer[state.time_cursor.model_idx];
 }
 
 pub fn check(state: State) bool {
@@ -110,13 +112,23 @@ pub const constants = struct {
     const max_model_depth = 4;
     const ModelDepth = u4;
     const max_model_storage = 31;
-    const ModelStorage = u5;
+    const ModelIdx = u5;
     const ModelTree = utils.UptreeWithBuffer(Model, Model.Input, constants.max_model_storage, constants.max_model_storage);
 };
 
-pub const Cursor = struct {
-    pos: Model.Position = .{},
-    selection: Selection = .none,
+pub const CursorTag = enum {
+    map,
+    time,
+};
+
+pub const MapCursor = struct {
+    pos: Model.Position,
+    selection: Selection,
+
+    pub const empty = MapCursor{
+        .pos = .{},
+        .selection = .none,
+    };
 
     pub const Selection = union(enum) {
         none: void,
@@ -178,7 +190,7 @@ pub const Cursor = struct {
             };
         }
 
-        fn handle_ok(selection: *const Selection, pos: Model.Position, pieces: []const Model.Piece, out_cursor: *Cursor) ?Model.Input {
+        fn handle_ok(selection: *const Selection, pos: Model.Position, pieces: []const Model.Piece, out_cursor: *MapCursor) ?Model.Input {
             return switch (selection.*) {
                 .none => blk: {
                     const find_piece = for (pieces) |piece| {
@@ -205,7 +217,7 @@ pub const Cursor = struct {
             };
         }
 
-        fn handle_back(selection: Selection, pos: Model.Position, out_cursor: *Cursor) ?Model.Input {
+        fn handle_back(selection: Selection, pos: Model.Position, out_cursor: *MapCursor) ?Model.Input {
             switch (selection) {
                 .none => out_cursor.* = .{
                     .pos = pos,
@@ -220,7 +232,7 @@ pub const Cursor = struct {
         }
     };
 
-    fn move(cursor: Cursor, dir: Model.Direction, bounds: Model.Position) ?Cursor {
+    fn move(cursor: MapCursor, dir: Model.Direction, bounds: Model.Position) ?MapCursor {
         return if (cursor.pos.move(dir, bounds)) |pos|
             if (cursor.selection.moved(dir)) |selection|
                 .{ .pos = pos, .selection = selection }
@@ -230,7 +242,7 @@ pub const Cursor = struct {
             null;
     }
 
-    fn move_dirs(cursor: Cursor, dirs: [Model.Direction.count]bool, bounds: Model.Position) ?Cursor {
+    fn move_dirs(cursor: MapCursor, dirs: [Model.Direction.count]bool, bounds: Model.Position) ?MapCursor {
         var cursor0 = cursor;
         var moved = false;
         for (dirs, 0..) |should_move, i| {
@@ -245,7 +257,7 @@ pub const Cursor = struct {
         return if (moved) cursor0 else null;
     }
 
-    fn handle_button(cursor: *const Cursor, button: ?StateInput.Button, pieces: []const Model.Piece, out_cursor: *Cursor) ?Model.Input {
+    fn handle_button(cursor: *const MapCursor, button: ?StateInput.Button, pieces: []const Model.Piece, out_cursor: *MapCursor) ?Model.Input {
         return if (button) |b|
             switch (b) {
                 .ok => cursor.selection.handle_ok(cursor.pos, pieces, out_cursor),
@@ -256,6 +268,14 @@ pub const Cursor = struct {
             break :blk null;
         };
     }
+};
+
+pub const TimeCursor = struct {
+    model_idx: constants.ModelIdx,
+
+    pub const empty = TimeCursor{
+        .model_idx = 0,
+    };
 };
 
 pub const Animation = struct {

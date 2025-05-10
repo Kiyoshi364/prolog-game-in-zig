@@ -12,7 +12,8 @@ const raylib = @cImport({
 
 tile: Tile = .{},
 piece: Piece = .{},
-cursor: Cursor = .{},
+map_cursor: MapCursor = .{},
+// TODO: time_cursor: TimeCursor = .{},
 path: Path = .{},
 
 const RaylibRenderer = @This();
@@ -25,7 +26,7 @@ pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) 
     const model = state.get_model();
     renderer.draw_map(&model_config.map);
     renderer.draw_pieces_anims(model.pieces.slice(), model_config.piece, state.anims.slice());
-    renderer.draw_cursor(state.cursor);
+    renderer.draw_map_cursor(state.map_cursor);
 
     raylib.EndDrawing();
 }
@@ -182,8 +183,8 @@ pub const Piece = struct {
     }
 };
 
-pub const Cursor = struct {
-    colors: [State.Cursor.Selection.count]raylib.Color = std.enums.directEnumArray(State.Cursor.Selection.@"enum", raylib.Color, 0, .{
+pub const MapCursor = struct {
+    colors: [State.MapCursor.Selection.count]raylib.Color = std.enums.directEnumArray(State.MapCursor.Selection.@"enum", raylib.Color, 0, .{
         .none = raylib.PINK,
         .piece = raylib.ORANGE,
     }),
@@ -191,39 +192,39 @@ pub const Cursor = struct {
     outline_size: u8 = 1,
     outline_color: raylib.Color = raylib.GOLD,
 
-    fn draw_cursor_rect(rcursor: RaylibRenderer.Cursor, rtile: RaylibRenderer.Tile, t: ScreenPos, cursor_color: raylib.Color) void {
+    fn draw_map_cursor_rect(rmcursor: RaylibRenderer.MapCursor, rtile: RaylibRenderer.Tile, t: ScreenPos, cursor_color: raylib.Color) void {
         const diff = rtile.size / 16;
         const tile_size_1_8 = rtile.size / 8;
         const tile_size_3_8 = 3 * tile_size_1_8;
         const c = cursor_color;
-        const oc = rcursor.outline_color;
+        const oc = rmcursor.outline_color;
 
         const Rect = struct { x: c_int, y: c_int, w: c_int, h: c_int, c: raylib.Color };
         const rectangles = blk: {
             const small = @as(c_int, tile_size_1_8);
             const big = @as(c_int, tile_size_3_8);
-            const o_small = small + 2 * rcursor.outline_size;
-            const o_big = big + 2 * rcursor.outline_size;
+            const o_small = small + 2 * rmcursor.outline_size;
+            const o_big = big + 2 * rmcursor.outline_size;
 
             const x_min = t.x - diff;
             const y_min = t.y - diff;
             const x_max = t.x + rtile.size + diff;
             const y_max = t.y + rtile.size + diff;
 
-            const ox_min = x_min - rcursor.outline_size;
-            const oy_min = y_min - rcursor.outline_size;
-            const ox_max = x_max + rcursor.outline_size;
-            const oy_max = y_max + rcursor.outline_size;
+            const ox_min = x_min - rmcursor.outline_size;
+            const oy_min = y_min - rmcursor.outline_size;
+            const ox_max = x_max + rmcursor.outline_size;
+            const oy_max = y_max + rmcursor.outline_size;
 
             const x_min2 = x_min + small;
             const y_min2 = y_min + small;
             const x_max2 = x_max - small;
             const y_max2 = y_max - small;
 
-            const ox_min2 = x_min2 + rcursor.outline_size;
-            const oy_min2 = y_min2 + rcursor.outline_size;
-            const ox_max2 = x_max2 - rcursor.outline_size;
-            const oy_max2 = y_max2 - rcursor.outline_size;
+            const ox_min2 = x_min2 + rmcursor.outline_size;
+            const oy_min2 = y_min2 + rmcursor.outline_size;
+            const ox_max2 = x_max2 - rmcursor.outline_size;
+            const oy_max2 = y_max2 - rmcursor.outline_size;
 
             break :blk [_]Rect{
                 .{ .x = ox_min, .y = oy_min, .w = o_big, .h = o_small, .c = oc },
@@ -306,17 +307,18 @@ fn draw_pieces_anims(renderer: RaylibRenderer, pieces: []const Model.Piece, pcon
     }
 }
 
-fn draw_cursor(renderer: RaylibRenderer, cursor: State.Cursor) void {
-    const t = renderer.tile.translate_tile_to_screen(cursor.pos.x, cursor.pos.y);
+// TODO: ask for active_cursor
+fn draw_map_cursor(renderer: RaylibRenderer, map_cursor: State.MapCursor) void {
+    const t = renderer.tile.translate_tile_to_screen(map_cursor.pos.x, map_cursor.pos.y);
 
-    const cursor_color = renderer.cursor.colors[@intFromEnum(cursor.selection)];
+    const cursor_color = renderer.map_cursor.colors[@intFromEnum(map_cursor.selection)];
 
-    switch (cursor.selection) {
+    switch (map_cursor.selection) {
         .none => {},
         .piece => |piece| renderer.path.draw_path(renderer.tile, t, piece.path.slice()),
     }
 
-    renderer.cursor.draw_cursor_rect(renderer.tile, t, cursor_color);
+    renderer.map_cursor.draw_map_cursor_rect(renderer.tile, t, cursor_color);
 }
 
 ///////////////////////// Raylib Abstraction Interface /////////////////////////
