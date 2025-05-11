@@ -29,14 +29,13 @@ pub fn main() !void {
         };
     };
 
-    var state = State.empty;
-    {
+    var state = blk: {
         const init_pieces = [_]Model.Piece{
             .{ .kind = .capitan, .pos = .{ .y = 3, .x = 2 } },
             .{ .kind = .minion, .pos = .{ .y = 4, .x = 4 } },
             .{ .kind = .minion, .pos = .{ .y = 2, .x = 5 } },
         };
-        var model = state.get_root_model();
+        var model = Model.empty;
         var pieces = @TypeOf(model.pieces).Builder{};
         pieces.push_slice_mut(&init_pieces);
         for (pieces.slice_mut()) |*piece| {
@@ -44,9 +43,9 @@ pub fn main() !void {
             piece.* = piece.refresh(model_config.piece);
         }
         model.pieces = pieces.frozen();
-        state.get_root_model_mut().* = model;
-        std.debug.assert(state.get_root_model().check());
-    }
+        break :blk State.with_root(model);
+    };
+    std.debug.assert(state.get_root_model().check());
 
     var state_ = @as(State, undefined);
 

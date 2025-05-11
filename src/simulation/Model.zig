@@ -4,8 +4,13 @@ const utils = @import("utils");
 
 const Model = @This();
 
-pieces: utils.Buffer(Piece, constants.PiecesSize, constants.max_pieces) = .{},
-piece_genid: constants.PieceID = 0,
+pieces: utils.Buffer(Piece, constants.PiecesSize, constants.max_pieces),
+piece_genid: constants.PieceID,
+
+pub const empty = Model{
+    .pieces = .{},
+    .piece_genid = 0,
+};
 
 pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model) ?AnimationInput {
     std.debug.assert(model.check());

@@ -13,12 +13,16 @@ const State = @This();
 const Animations = utils.Buffer(Animation, Model.constants.PiecesSize, Model.constants.max_pieces);
 const Path = utils.Buffer(Model.Direction, constants.PathSize, constants.max_path);
 
-pub const empty = State{
-    .active_cursor = .map,
-    .map_cursor = MapCursor.empty,
-    .time_cursor = TimeCursor.with_root(.{}),
-    .anims = .{},
-};
+pub const empty = State.with_root(Model.empty);
+
+pub fn with_root(the_root_model: Model) State {
+    return .{
+        .active_cursor = .map,
+        .map_cursor = MapCursor.empty,
+        .time_cursor = TimeCursor.with_root(the_root_model),
+        .anims = .{},
+    };
+}
 
 pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?State {
     std.debug.assert(state.check());
