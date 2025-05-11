@@ -26,7 +26,7 @@ pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) 
     const model = state.get_curr_model();
     renderer.draw_map(&model_config.map);
     renderer.draw_pieces_anims(model.pieces.slice(), model_config.piece, state.anims.slice());
-    renderer.draw_map_cursor(state.map_cursor);
+    renderer.draw_map_cursor(state.map_cursor, state.active_cursor);
 
     raylib.EndDrawing();
 }
@@ -184,9 +184,15 @@ pub const Piece = struct {
 };
 
 pub const MapCursor = struct {
-    colors: [State.MapCursor.Selection.count]raylib.Color = std.enums.directEnumArray(State.MapCursor.Selection.@"enum", raylib.Color, 0, .{
-        .none = raylib.PINK,
-        .piece = raylib.ORANGE,
+    colors: [State.CursorTag.count][State.MapCursor.Selection.count]raylib.Color = std.enums.directEnumArray(State.CursorTag, [State.MapCursor.Selection.count]raylib.Color, 0, .{
+        .map = std.enums.directEnumArray(State.MapCursor.Selection.@"enum", raylib.Color, 0, .{
+            .none = raylib.MAGENTA,
+            .piece = raylib.ORANGE,
+        }),
+        .time = std.enums.directEnumArray(State.MapCursor.Selection.@"enum", raylib.Color, 0, .{
+            .none = raylib.PINK,
+            .piece = raylib.YELLOW,
+        }),
     }),
 
     outline_size: u8 = 1,
@@ -307,11 +313,10 @@ fn draw_pieces_anims(renderer: RaylibRenderer, pieces: []const Model.Piece, pcon
     }
 }
 
-// TODO: ask for active_cursor
-fn draw_map_cursor(renderer: RaylibRenderer, map_cursor: State.MapCursor) void {
+fn draw_map_cursor(renderer: RaylibRenderer, map_cursor: State.MapCursor, active_cursor: State.CursorTag) void {
     const t = renderer.tile.translate_tile_to_screen(map_cursor.pos.x, map_cursor.pos.y);
 
-    const cursor_color = renderer.map_cursor.colors[@intFromEnum(map_cursor.selection)];
+    const cursor_color = renderer.map_cursor.colors[@intFromEnum(active_cursor)][@intFromEnum(map_cursor.selection)];
 
     switch (map_cursor.selection) {
         .none => {},

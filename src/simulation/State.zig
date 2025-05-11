@@ -203,6 +203,8 @@ pub const constants = struct {
 pub const CursorTag = enum {
     map,
     time,
+
+    pub const count: comptime_int = @typeInfo(@This()).@"enum".fields.len;
 };
 
 pub const MapCursor = struct {
@@ -220,7 +222,7 @@ pub const MapCursor = struct {
         // menu: MenuSelection,
 
         pub const @"enum": type = @typeInfo(@This()).@"union".tag_type.?;
-        pub const count: comptime_int = @typeInfo(Selection.@"enum").@"enum".fields.len;
+        pub const count: comptime_int = @typeInfo(@This().@"enum").@"enum".fields.len;
 
         const PieceSelection = struct {
             old_pos: Model.Position,
