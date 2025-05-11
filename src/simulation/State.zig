@@ -394,7 +394,9 @@ pub const Animation = struct {
 };
 
 fn update_animations(state: State, anim_input: Model.AnimationInput) Animations {
-    const piece_id = anim_input.piece_id();
+    const piece_id = switch (anim_input) {
+        .move => |move| move.piece_id(),
+    };
     const anims_slice = state.anims.slice();
 
     var buffer = Animations.Builder{};

@@ -123,17 +123,15 @@ pub const Input = union(enum) {
     pub const Move = struct {
         piece: Piece,
         path: []const Direction,
+
+        pub fn piece_id(move: Move) constants.PieceID {
+            return move.piece.id;
+        }
     };
 };
 
 pub const AnimationInput = union(enum) {
     move: Input.Move,
-
-    pub fn piece_id(anim: AnimationInput) constants.PieceID {
-        return switch (anim) {
-            .move => |move| move.piece.id,
-        };
-    }
 };
 
 pub const Direction = enum(u2) {
