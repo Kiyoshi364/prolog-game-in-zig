@@ -4,79 +4,117 @@ const utils = @import("utils");
 
 const Model = @import("Model.zig");
 
-// TODO: move model_tree to TimeCursor
-model_tree: constants.ModelTree = constants.ModelTree.with_root(.{}),
-active_cursor: CursorTag = .map,
-map_cursor: MapCursor = MapCursor.empty,
-time_cursor: TimeCursor = TimeCursor.empty,
-anims: Animations = .{},
+active_cursor: CursorTag,
+map_cursor: MapCursor,
+time_cursor: TimeCursor,
+anims: Animations,
 
 const State = @This();
 const Animations = utils.Buffer(Animation, Model.constants.PiecesSize, Model.constants.max_pieces);
 const Path = utils.Buffer(Model.Direction, constants.PathSize, constants.max_path);
 
+pub const empty = State{
+    .active_cursor = .map,
+    .map_cursor = MapCursor.empty,
+    .time_cursor = TimeCursor.with_root(.{}),
+    .anims = .{},
+};
+
 pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?State {
     std.debug.assert(state.check());
-    var out_state = @as(State, undefined);
 
-    const map_cursor1 = state.map_cursor.move_dirs(
-        state_input.modifier(),
-        state_input.dirs,
-        model_config.map.bounds,
-    ) orelse state.map_cursor;
+    // std.debug.print("{} {}\n", .{state.time_cursor.model_idx, state.active_cursor});
+    // std.debug.print("{} {}\n", .{state_input.modifier(), state_input});
+    const out_state = switch (state.active_cursor) {
+        .map => out_state: {
+            var varout_active_cursor = @as(CursorTag, undefined);
+            const map_cursor1 = state.map_cursor.move_dirs(
+                state_input.modifier(),
+                state_input.dirs,
+                model_config.map.bounds,
+                &varout_active_cursor,
+            ) orelse state.map_cursor;
+            const out_active_cursor = varout_active_cursor;
 
-    const model = state.get_model();
-    if (map_cursor1.handle_button(
-        state_input.modifier(),
-        state_input.button,
-        model.pieces.slice(),
-        &out_state.map_cursor,
-    )) |model_input| {
-        var model_tree = @as(constants.ModelTree, undefined);
-        const input_idx = if (state.model_tree.find_input_or_register(model_input)) |reg_input| blk: {
-            model_tree = reg_input.self;
-            break :blk reg_input.idx;
-        } else {
-            out_state.model_tree = state.model_tree;
-            out_state.time_cursor = state.time_cursor;
-            out_state.anims = state.tick_anims();
-            return out_state;
-        };
-        var out_model = @as(Model, undefined);
-        if (model.step(model_input, model_config, &out_model)) |anim_input| {
-            if (model_tree.register_state(out_model, .{ .input = input_idx, .state = state.time_cursor.model_idx })) |reg_state| {
-                out_state.model_tree = reg_state.self;
-                out_state.time_cursor.model_idx = reg_state.idx;
-            } else {
-                // TODO
-                unreachable;
-            }
-            out_state.anims = state.update_animations(anim_input);
-        } else {
-            // TODO: log/notify invalid move
-            out_state.model_tree = state.model_tree;
-            out_state.time_cursor = state.time_cursor;
-            out_state.anims = state.tick_anims();
-        }
-    } else {
-        out_state.model_tree = state.model_tree;
-        out_state.time_cursor = state.time_cursor;
-        out_state.anims = state.tick_anims();
-    }
+            const model = state.get_curr_model();
+            var varout_map_cursor = @as(MapCursor, undefined);
+            var varout_time_cursor = @as(TimeCursor, undefined);
+            const out_anims = if (map_cursor1.handle_button(
+                state_input.modifier(),
+                state_input.button,
+                model.pieces.slice(),
+                &varout_map_cursor,
+            )) |model_input| out_anims: {
+                var varout_model = @as(Model, undefined);
+                break :out_anims if (model.step(model_input, model_config, &varout_model)) |anim_input| blk: {
+                    // TODO: log/notify out of time traveling memory
+                    state.time_cursor.discover_transition(model_input, varout_model, &varout_time_cursor) orelse unreachable;
+                    break :blk state.update_animations(anim_input);
+                } else blk: {
+                    // TODO: log/notify invalid move
+                    varout_time_cursor = state.time_cursor;
+                    break :blk state.tick_anims();
+                };
+            } else blk: {
+                varout_time_cursor = state.time_cursor;
+                break :blk state.tick_anims();
+            };
+            const out_map_cursor = varout_map_cursor;
+            const out_time_cursor = varout_time_cursor;
 
+            break :out_state State{
+                .active_cursor = out_active_cursor,
+                .map_cursor = out_map_cursor,
+                .time_cursor = out_time_cursor,
+                .anims = out_anims,
+            };
+        },
+        .time => out_state: {
+            var varout_active_cursor = @as(CursorTag, undefined);
+            const time_cursor1 = state.time_cursor.move_dirs(
+                state_input.modifier(),
+                state_input.dirs,
+                &varout_active_cursor,
+            ) orelse state.time_cursor;
+
+            const out_time_cursor = time_cursor1.handle_button(
+                state_input.modifier(),
+                state_input.button,
+                &varout_active_cursor,
+            ) orelse time_cursor1;
+            const out_active_cursor = varout_active_cursor;
+
+            break :out_state State{
+                .active_cursor = out_active_cursor,
+                .map_cursor = state.map_cursor,
+                .time_cursor = out_time_cursor,
+                .anims = .{},
+            };
+        },
+    };
     std.debug.assert(out_state.check());
     return out_state;
 }
 
-pub fn get_model(state: State) Model {
-    return state.model_tree.state_slice()[state.time_cursor.model_idx];
+pub fn get_curr_model(state: State) Model {
+    return state.time_cursor.curr_model();
 }
 
-pub fn get_model_mut(state: *State) *Model {
-    return &state.model_tree.state_buffer.buffer[state.time_cursor.model_idx];
+pub fn get_root_model(state: State) Model {
+    return state.time_cursor.root_model();
+}
+
+pub fn get_root_model_mut(state: *State) *Model {
+    return state.time_cursor.root_model_mut();
 }
 
 pub fn check(state: State) bool {
+    if (state.time_cursor.model_idx < state.time_cursor.model_tree.state_slice().len) {
+        // Nothing
+    } else {
+        return false;
+    }
+
     if (0 < state.anims.size) {
         const anims_slice = state.anims.slice();
         for (anims_slice[1..], 0..) |curr_anim, i| {
@@ -91,6 +129,21 @@ pub fn check(state: State) bool {
         // Nothing
     }
     return true;
+}
+
+fn moved_control(ret: anytype, dir: Model.Direction, out_activecursor: *CursorTag) ?@TypeOf(ret) {
+    return switch (dir) {
+        .up => null,
+        .left => blk: {
+            out_activecursor.* = .map;
+            break :blk ret;
+        },
+        .down => null,
+        .right => blk: {
+            out_activecursor.* = .time;
+            break :blk ret;
+        },
+    };
 }
 
 pub const StateInput = struct {
@@ -141,7 +194,6 @@ pub const constants = struct {
     const ModelDepth = u4;
     const max_model_storage = 31;
     const ModelIdx = u5;
-    const ModelTree = utils.UptreeWithBuffer(Model, Model.Input, constants.max_model_storage, constants.max_model_storage);
 };
 
 pub const CursorTag = enum {
@@ -218,17 +270,8 @@ pub const MapCursor = struct {
             };
         }
 
-        fn moved_control(selection: Selection, dir: Model.Direction) ?Selection {
-            // TODO
-            _ = dir;
-            return switch (selection) {
-                .none => unreachable,
-                .piece => |_| unreachable,
-            };
-        }
-
         fn handle_ok(selection: *const Selection, mod: StateInput.Modifier, pos: Model.Position, pieces: []const Model.Piece, out_cursor: *MapCursor) ?Model.Input {
-            // TODO
+            // TODO: do stuff with mod + ok
             std.debug.assert(mod == .none);
             return switch (selection.*) {
                 .none => blk: {
@@ -257,7 +300,7 @@ pub const MapCursor = struct {
         }
 
         fn handle_back(selection: Selection, mod: StateInput.Modifier, pos: Model.Position, out_cursor: *MapCursor) ?Model.Input {
-            // TODO
+            // TODO: do stuff with mod + back
             std.debug.assert(mod == .none);
             switch (selection) {
                 .none => out_cursor.* = .{
@@ -273,36 +316,40 @@ pub const MapCursor = struct {
         }
     };
 
-    fn move(cursor: MapCursor, dir: Model.Direction, mod: StateInput.Modifier, bounds: Model.Position) ?MapCursor {
+    fn move(cursor: MapCursor, mod: StateInput.Modifier, dir: Model.Direction, bounds: Model.Position, out_activecursor: *CursorTag) ?MapCursor {
         return switch (mod) {
             .none => if (cursor.pos.move(dir, bounds)) |pos|
-                if (cursor.selection.moved(dir)) |selection|
-                    .{ .pos = pos, .selection = selection }
-                else
-                    null
+                if (cursor.selection.moved(dir)) |selection| blk: {
+                    out_activecursor.* = .map;
+                    break :blk .{ .pos = pos, .selection = selection };
+                } else null
             else
                 null,
-            // TODO
-            .control => if (cursor.selection.moved_control(dir)) |selection|
+            .control => if (moved_control(cursor.selection, dir, out_activecursor)) |selection|
                 .{ .pos = cursor.pos, .selection = selection }
             else
                 null,
         };
     }
 
-    fn move_dirs(cursor: MapCursor, mod: StateInput.Modifier, dirs: [Model.Direction.count]bool, bounds: Model.Position) ?MapCursor {
+    fn move_dirs(cursor: MapCursor, mod: StateInput.Modifier, dirs: [Model.Direction.count]bool, bounds: Model.Position, out_activecursor: *CursorTag) ?MapCursor {
         var cursor0 = cursor;
         var moved = false;
         for (dirs, 0..) |should_move, i| {
             if (should_move) {
                 const dir = @as(Model.Direction, @enumFromInt(i));
-                if (cursor0.move(dir, mod, bounds)) |cursor1| {
+                if (cursor0.move(mod, dir, bounds, out_activecursor)) |cursor1| {
                     cursor0 = cursor1;
                     moved = true;
                 }
             }
         }
-        return if (moved) cursor0 else null;
+        return if (moved)
+            cursor0
+        else blk: {
+            out_activecursor.* = .map;
+            break :blk null;
+        };
     }
 
     fn handle_button(cursor: *const MapCursor, mod: StateInput.Modifier, button: ?StateInput.Button, pieces: []const Model.Piece, out_cursor: *MapCursor) ?Model.Input {
@@ -319,11 +366,135 @@ pub const MapCursor = struct {
 };
 
 pub const TimeCursor = struct {
+    model_tree: ModelTree,
     model_idx: constants.ModelIdx,
+    old_model_idx: constants.ModelIdx,
 
-    pub const empty = TimeCursor{
-        .model_idx = 0,
-    };
+    const ModelTree = utils.UptreeWithBuffer(Model, Model.Input, constants.max_model_storage, constants.max_model_storage);
+
+    pub fn with_root(the_root_model: Model) TimeCursor {
+        return .{
+            .model_tree = ModelTree.with_root(the_root_model),
+            .model_idx = 0,
+            .old_model_idx = 0,
+        };
+    }
+
+    pub fn curr_model(cursor: TimeCursor) Model {
+        return cursor.model_tree.state_slice()[cursor.model_idx];
+    }
+
+    pub fn root_model(cursor: TimeCursor) Model {
+        return cursor.model_tree.state_slice()[0];
+    }
+
+    pub fn root_model_mut(cursor: *TimeCursor) *Model {
+        std.debug.assert(0 < cursor.model_tree.state_buffer.size);
+        return &cursor.model_tree.state_buffer.buffer[0];
+    }
+
+    fn discover_transition(cursor: TimeCursor, input: Model.Input, next_model: Model, out_cursor: *TimeCursor) ?void {
+        const reg_input = cursor.model_tree.find_input_or_register(input) orelse return null;
+        const reg_state = reg_input.self.register_state(
+            next_model,
+            .{ .input = reg_input.idx, .state = cursor.model_idx },
+        ) orelse return null;
+        out_cursor.* = .{
+            .model_tree = reg_state.self,
+            .model_idx = reg_state.idx,
+            .old_model_idx = reg_state.idx,
+        };
+    }
+
+    // TODO: Use SIMD (@Vector)
+    // TODO: sort model_tree to search less
+    fn moved(cursor: TimeCursor, dir: Model.Direction) ?constants.ModelIdx {
+        const parents = cursor.model_tree.parent_states_slice();
+        const curr = cursor.model_idx;
+        return switch (dir) {
+            .up => parents[curr],
+            .left => for (0..curr) |pre_i| {
+                const i = curr - pre_i - 1;
+                const p = parents[i];
+                std.debug.assert(curr != i);
+                if (parents[cursor.model_idx] == p and p != i and i != cursor.model_idx) {
+                    break @intCast(i);
+                }
+            } else null,
+            .down => for (parents, 0..) |p, i| {
+                if (cursor.model_idx == p and i != p) {
+                    break @intCast(i);
+                }
+            } else null,
+            .right => for (parents[curr + 1..], (curr + 1)..) |p, i| {
+                std.debug.assert(curr != i);
+                if (parents[curr] == p and p != i) {
+                    break @intCast(i);
+                }
+            } else null,
+        };
+    }
+
+    fn move(cursor: TimeCursor, mod: StateInput.Modifier, dir: Model.Direction, out_activecursor: *CursorTag) ?TimeCursor {
+        return switch (mod) {
+            .none => if (cursor.moved(dir)) |model_idx| blk: {
+                out_activecursor.* = .time;
+                break :blk TimeCursor{
+                    .model_tree = cursor.model_tree,
+                    .model_idx = model_idx,
+                    .old_model_idx = cursor.old_model_idx,
+                };
+            } else null,
+            .control => moved_control(cursor, dir, out_activecursor),
+        };
+    }
+
+    fn move_dirs(cursor: TimeCursor, mod: StateInput.Modifier, dirs: [Model.Direction.count]bool, out_activecursor: *CursorTag) ?TimeCursor {
+        var cursor0 = cursor;
+        var has_moved = false;
+        for (dirs, 0..) |should_move, i| {
+            if (should_move) {
+                const dir = @as(Model.Direction, @enumFromInt(i));
+                if (cursor0.move(mod, dir, out_activecursor)) |cursor1| {
+                    cursor0 = cursor1;
+                    has_moved = true;
+                }
+            }
+        }
+        return if (has_moved)
+            cursor0
+        else blk: {
+            out_activecursor.* = .time;
+            break :blk null;
+        };
+    }
+
+    fn handle_button(cursor: *const TimeCursor, mod: StateInput.Modifier, button: ?StateInput.Button, out_activecursor: *CursorTag) ?TimeCursor {
+        return if (button) |b|
+            switch (b) {
+                .ok => blk: {
+                    // TODO: do stuff with mod + ok
+                    std.debug.assert(mod == .none);
+                    out_activecursor.* = .map;
+                    break :blk TimeCursor{
+                        .model_tree = cursor.model_tree,
+                        .model_idx = cursor.model_idx,
+                        .old_model_idx = cursor.model_idx,
+                    };
+                },
+                .back => blk: {
+                    // TODO: do stuff with mod + back
+                    std.debug.assert(mod == .none);
+                    out_activecursor.* = .map;
+                    break :blk TimeCursor{
+                        .model_tree = cursor.model_tree,
+                        .model_idx = cursor.old_model_idx,
+                        .old_model_idx = cursor.old_model_idx,
+                    };
+                },
+            }
+        else null;
+    }
 };
 
 pub const Animation = struct {
