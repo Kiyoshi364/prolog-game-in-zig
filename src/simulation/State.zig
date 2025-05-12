@@ -376,6 +376,7 @@ pub const TimeCursor = struct {
     model_idx: constants.ModelIdx,
     old_model_idx: constants.ModelIdx,
 
+    // TODO: use Updag instead of Uptree
     const ModelTree = utils.UptreeWithBuffer(Model, Model.Input, constants.max_model_storage, constants.max_model_storage);
 
     pub fn with_root(the_root_model: Model) TimeCursor {
