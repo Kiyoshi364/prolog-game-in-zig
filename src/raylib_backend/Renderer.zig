@@ -10,6 +10,19 @@ const raylib = @cImport({
     @cInclude("raylib.h");
 });
 
+// Mutable State
+curr_offset: ScreenPos = ScreenPos.origin,
+curr_window: ?Window.Tag = null,
+windows: [Window.Tag.count]Window = std.enums.directEnumArray(Window.Tag, Window, 0, .{
+    .board = .{
+        .x = 0,
+        .y = 0,
+        .width = 592,
+        .height = 600,
+    },
+}),
+
+// Immutable State
 tile: Tile,
 piece: Piece,
 map_cursor: MapCursor,
@@ -25,21 +38,62 @@ pub const default = RaylibRenderer{
     .path = Path.default,
 };
 
-pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) void {
+pub fn draw(in_renderer: RaylibRenderer, state: State, model_config: Model.Config) void {
+    var renderer = in_renderer;
     raylib.BeginDrawing();
 
     raylib.ClearBackground(raylib.LIGHTGRAY);
 
     const model = state.get_curr_model();
+
+    renderer.begin_window_mode(.board);
+
     renderer.draw_map(&model_config.map);
     renderer.draw_pieces_anims(model.pieces.slice(), model_config.piece, state.anims.slice());
     renderer.draw_map_cursor(state.map_cursor, state.active_cursor);
+
+    renderer.end_window_mode(.board);
 
     raylib.DrawFPS(0, raylib.GetScreenHeight() - 16);
     raylib.EndDrawing();
 }
 
-const ScreenPos = struct { x: c_int, y: c_int };
+const ScreenPos = struct {
+    x: c_int,
+    y: c_int,
+
+    const origin = ScreenPos{ .x = 0, .y = 0 };
+
+    fn add(a: ScreenPos, b: ScreenPos) ScreenPos {
+        return .{ .x = a.x + b.x, .y = a.y + b.y };
+    }
+};
+
+pub const Window = struct {
+    x: c_int,
+    y: c_int,
+    width: c_int,
+    height: c_int,
+
+    pub const Tag = enum {
+        board,
+
+        pub const count = @typeInfo(@This()).@"enum".fields.len;
+    };
+
+    inline fn begin_scissor_mode(window: Window) void {
+        raylib.BeginScissorMode(window.x, window.y, window.width, window.height);
+    }
+
+    inline fn end_scissor_mode(window: Window) void {
+        _ = window;
+        raylib.EndScissorMode();
+    }
+
+    fn offset_pos(window: Window) ScreenPos {
+        return .{ .x = window.x, .y = window.y };
+    }
+};
 
 pub const Tile = struct {
     size: u8,
@@ -68,11 +122,12 @@ pub const Tile = struct {
         };
     }
 
-    fn draw_tile(rtile: RaylibRenderer.Tile, tile: Model.Config.Tile, x: c_int, y: c_int) void {
+    fn draw_tile(rtile: *const RaylibRenderer.Tile, tile: Model.Config.Tile, x: c_int, y: c_int) void {
         std.debug.assert(tile == .empty);
+        const renderer = @as(*const RaylibRenderer, @alignCast(@fieldParentPtr("tile", rtile)));
 
         const t = rtile.translate_tile_to_screen(x, y);
-        draw_rect_outline(t.x, t.y, rtile.size, rtile.size, rtile.color, rtile.outline_size, rtile.outline_color);
+        renderer.draw_rect_outline(t.x, t.y, rtile.size, rtile.size, rtile.color, rtile.outline_size, rtile.outline_color);
     }
 };
 
@@ -99,12 +154,17 @@ pub const Piece = struct {
         }),
     };
 
-    fn draw_piece(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece, pconfig: Model.Config.PieceConfig) void {
-        const t = rtile.translate_tile_to_screen(piece.pos.x, piece.pos.y);
-        rpiece.draw_piece_at(rtile, piece, pconfig, t);
+    fn draw_piece(rpiece: *const RaylibRenderer.Piece, piece: Model.Piece, pconfig: Model.Config.PieceConfig) void {
+        const renderer = @as(*const RaylibRenderer, @alignCast(@fieldParentPtr("piece", rpiece)));
+
+        const t = renderer.tile.translate_tile_to_screen(piece.pos.x, piece.pos.y);
+        rpiece.draw_piece_at(renderer, piece, pconfig, t);
     }
 
-    fn draw_piece_anim(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece, pconfig: Model.Config.PieceConfig, anim: State.Animation) void {
+    fn draw_piece_anim(rpiece: *const RaylibRenderer.Piece, piece: Model.Piece, pconfig: Model.Config.PieceConfig, anim: State.Animation) void {
+        const renderer = @as(*const RaylibRenderer, @alignCast(@fieldParentPtr("piece", rpiece)));
+        const rtile = renderer.tile;
+
         const t = @as(ScreenPos, switch (anim.state) {
             .move => |move| blk: {
                 const a = move.path.get(move.path_idx).toAddData();
@@ -123,10 +183,12 @@ pub const Piece = struct {
                     .{ .x = t0.x - @as(c_int, ax), .y = t0.y - @as(c_int, ay) };
             },
         });
-        rpiece.draw_piece_at(rtile, piece, pconfig, t);
+        rpiece.draw_piece_at(renderer, piece, pconfig, t);
     }
 
-    fn draw_piece_at(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece, pconfig: Model.Config.PieceConfig, t: ScreenPos) void {
+    fn draw_piece_at(rpiece: RaylibRenderer.Piece, renderer: *const RaylibRenderer, piece: Model.Piece, pconfig: Model.Config.PieceConfig, t: ScreenPos) void {
+        const rtile = renderer.tile;
+
         const piece_factor_size = rpiece.kinds_factor_size[@intFromEnum(piece.kind)];
         const piece_div_size = rpiece.kinds_div_size[@intFromEnum(piece.kind)];
         const piece_size = rtile.size * piece_factor_size / piece_div_size;
@@ -134,7 +196,7 @@ pub const Piece = struct {
         switch (piece.kind) {
             .capitan => {
                 const pad = (rtile.size - piece_size + 1) / 2;
-                draw_rect_outline(
+                renderer.draw_rect_outline(
                     t.x + pad,
                     t.y + pad,
                     piece_size,
@@ -146,7 +208,7 @@ pub const Piece = struct {
             },
             .minion => {
                 const pad = rtile.size / 2;
-                draw_circ_outline(
+                renderer.draw_circ_outline(
                     t.x + pad,
                     t.y + pad,
                     @floatFromInt(piece_size),
@@ -157,6 +219,7 @@ pub const Piece = struct {
             },
         }
 
+        // TODO: extract to a function draw_energy
         {
             // TODO: extract constants to config
             const radius = rtile.size * 1 / 16;
@@ -190,7 +253,7 @@ pub const Piece = struct {
 
                 {
                     const step = it.next().?;
-                    draw_circ_outline(
+                    renderer.draw_circ_outline(
                         x + step / 2,
                         t.y + rtile.size - 2 * radius,
                         @floatFromInt(radius),
@@ -231,7 +294,10 @@ pub const MapCursor = struct {
         .outline_color = raylib.GOLD,
     };
 
-    fn draw_map_cursor_rect(rmcursor: RaylibRenderer.MapCursor, rtile: RaylibRenderer.Tile, t: ScreenPos, cursor_color: raylib.Color) void {
+    fn draw_map_cursor_rect(rmcursor: *const RaylibRenderer.MapCursor, t: ScreenPos, cursor_color: raylib.Color) void {
+        const renderer = @as(*const RaylibRenderer, @alignCast(@fieldParentPtr("map_cursor", rmcursor)));
+        const rtile = renderer.tile;
+
         const diff = rtile.size / 16;
         const tile_size_1_8 = rtile.size / 8;
         const tile_size_3_8 = 3 * tile_size_1_8;
@@ -289,7 +355,7 @@ pub const MapCursor = struct {
         };
 
         for (rectangles) |rect| {
-            raylib.DrawRectangle(rect.x, rect.y, rect.w, rect.h, rect.c);
+            renderer.draw_rect(rect.x, rect.y, rect.w, rect.h, rect.c);
         }
     }
 };
@@ -301,7 +367,10 @@ pub const Path = struct {
         .color = raylib.GREEN,
     };
 
-    fn draw_path(rpath: RaylibRenderer.Path, rtile: RaylibRenderer.Tile, t: ScreenPos, path: []const Model.Direction) void {
+    fn draw_path(rpath: *const RaylibRenderer.Path, t: ScreenPos, path: []const Model.Direction) void {
+        const renderer = @as(*const RaylibRenderer, @alignCast(@fieldParentPtr("path", rpath)));
+        const rtile = renderer.tile;
+
         const half_tile_size = rtile.size / 2;
         const step = rtile.size + rtile.outline_size + rtile.pad;
 
@@ -318,13 +387,30 @@ pub const Path = struct {
                 .down => .{ .x = t1.x, .y = t1.y - step },
                 .left => .{ .x = t1.x + step, .y = t1.y },
             });
-            raylib.DrawLine(t0.x, t0.y, t1.x, t1.y, rpath.color);
+            renderer.draw_line(t0.x, t0.y, t1.x, t1.y, rpath.color);
             t1 = t0;
         }
     }
 };
 
+fn begin_window_mode(renderer: *RaylibRenderer, tag: Window.Tag) void {
+    std.debug.assert(renderer.curr_window == null);
+    const window =  renderer.windows[@intFromEnum(tag)];
+    renderer.*.curr_offset = window.offset_pos();
+    renderer.*.curr_window = tag;
+    window.begin_scissor_mode();
+}
+
+fn end_window_mode(renderer: *RaylibRenderer, tag: Window.Tag) void {
+    std.debug.assert(renderer.curr_window == tag);
+    const window =  renderer.windows[@intFromEnum(tag)];
+    window.end_scissor_mode();
+    renderer.*.curr_offset = ScreenPos.origin;
+    renderer.*.curr_window = null;
+}
+
 fn draw_map(renderer: RaylibRenderer, map: *const Model.Config.MapConfig) void {
+    std.debug.assert(renderer.curr_window == .board);
     const offset = map.bounds.y * map.bounds.x - 1;
     for ([_]bool{ false, true }) |mirrored| {
         for (map.map(), 0..) |tile, pre_idx| {
@@ -341,11 +427,11 @@ fn draw_pieces_anims(renderer: RaylibRenderer, pieces: []const Model.Piece, pcon
     for (pieces) |piece| {
         if (anim_idx < anims.len and piece.id == anims[anim_idx].piece_id) {
             const anim = anims[anim_idx];
-            renderer.piece.draw_piece_anim(renderer.tile, piece, pconfig, anim);
+            renderer.piece.draw_piece_anim(piece, pconfig, anim);
             anim_idx += 1;
         } else {
             std.debug.assert(anims.len <= anim_idx or piece.id < anims[anim_idx].piece_id);
-            renderer.piece.draw_piece(renderer.tile, piece, pconfig);
+            renderer.piece.draw_piece(piece, pconfig);
         }
     }
 }
@@ -357,15 +443,29 @@ fn draw_map_cursor(renderer: RaylibRenderer, map_cursor: State.MapCursor, active
 
     switch (map_cursor.selection) {
         .none => {},
-        .piece => |piece| renderer.path.draw_path(renderer.tile, t, piece.path.slice()),
+        .piece => |piece| renderer.path.draw_path(t, piece.path.slice()),
     }
 
-    renderer.map_cursor.draw_map_cursor_rect(renderer.tile, t, cursor_color);
+    renderer.map_cursor.draw_map_cursor_rect(t, cursor_color);
 }
 
 ///////////////////////// Raylib Abstraction Interface /////////////////////////
 
+inline fn draw_rect(
+    renderer: RaylibRenderer,
+    x: c_int,
+    y: c_int,
+    w: c_int,
+    h: c_int,
+    color: raylib.Color,
+) void {
+    const offx = renderer.curr_offset.x;
+    const offy = renderer.curr_offset.y;
+    raylib.DrawRectangle(offx + x, offy + y, w, h, color);
+}
+
 fn draw_rect_outline(
+    renderer: RaylibRenderer,
     x: c_int,
     y: c_int,
     w: c_int,
@@ -378,11 +478,24 @@ fn draw_rect_outline(
     const oy = y - outline_size;
     const ow = w + 2 * outline_size;
     const oh = h + 2 * outline_size;
-    raylib.DrawRectangle(ox, oy, ow, oh, outline_color);
-    raylib.DrawRectangle(x, y, w, h, color);
+    renderer.draw_rect(ox, oy, ow, oh, outline_color);
+    renderer.draw_rect(x, y, w, h, color);
+}
+
+inline fn draw_circ(
+    renderer: RaylibRenderer,
+    x: c_int,
+    y: c_int,
+    r: f32,
+    color: raylib.Color,
+) void {
+    const offx = renderer.curr_offset.x;
+    const offy = renderer.curr_offset.y;
+    raylib.DrawCircle(offx + x, offy + y, r, color);
 }
 
 fn draw_circ_outline(
+    renderer: RaylibRenderer,
     x: c_int,
     y: c_int,
     r: f32,
@@ -390,6 +503,19 @@ fn draw_circ_outline(
     outline_size: c_int,
     outline_color: raylib.Color,
 ) void {
-    raylib.DrawCircle(x, y, r + @as(f32, @floatFromInt(outline_size)), outline_color);
-    raylib.DrawCircle(x, y, r, color);
+    renderer.draw_circ(x, y, r + @as(f32, @floatFromInt(outline_size)), outline_color);
+    renderer.draw_circ(x, y, r, color);
+}
+
+inline fn draw_line(
+    renderer: RaylibRenderer,
+    x0: c_int,
+    y0: c_int,
+    x1: c_int,
+    y1: c_int,
+    color: raylib.Color,
+) void {
+    const offx = renderer.curr_offset.x;
+    const offy = renderer.curr_offset.y;
+    raylib.DrawLine(offx + x0, offy + y0, offx + x1, offy + y1, color);
 }
