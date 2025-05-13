@@ -28,6 +28,7 @@ pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) 
     renderer.draw_pieces_anims(model.pieces.slice(), model_config.piece, state.anims.slice());
     renderer.draw_map_cursor(state.map_cursor, state.active_cursor);
 
+    raylib.DrawFPS(0, raylib.GetScreenHeight() - 16);
     raylib.EndDrawing();
 }
 
