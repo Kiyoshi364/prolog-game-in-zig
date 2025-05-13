@@ -49,7 +49,7 @@ pub fn main() !void {
 
     var state_ = @as(State, undefined);
 
-    var renderer = Renderer{};
+    var renderer = Renderer.default;
 
     var window = backend.Window{
         .width = 800,

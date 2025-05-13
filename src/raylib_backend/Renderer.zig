@@ -10,13 +10,20 @@ const raylib = @cImport({
     @cInclude("raylib.h");
 });
 
-tile: Tile = .{},
-piece: Piece = .{},
-map_cursor: MapCursor = .{},
-// TODO: time_cursor: TimeCursor = .{},
-path: Path = .{},
+tile: Tile,
+piece: Piece,
+map_cursor: MapCursor,
+// TODO: time_cursor: TimeCursor,
+path: Path,
 
 const RaylibRenderer = @This();
+
+pub const default = RaylibRenderer{
+    .tile = Tile.default,
+    .piece = Piece.default,
+    .map_cursor = MapCursor.default,
+    .path = Path.default,
+};
 
 pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) void {
     raylib.BeginDrawing();
@@ -35,13 +42,23 @@ pub fn draw(renderer: RaylibRenderer, state: State, model_config: Model.Config) 
 const ScreenPos = struct { x: c_int, y: c_int };
 
 pub const Tile = struct {
-    size: u8 = 64,
-    initial_pad: u8 = 16,
-    pad: u8 = 8,
-    outline_size: u8 = 1,
+    size: u8,
+    initial_pad: u8,
+    pad: u8,
+    outline_size: u8,
 
-    color: raylib.Color = raylib.BLACK,
-    outline_color: raylib.Color = raylib.RAYWHITE,
+    color: raylib.Color,
+    outline_color: raylib.Color,
+
+    pub const default = Tile{
+        .size = 64,
+        .initial_pad = 8,
+        .pad = 8,
+        .outline_size = 1,
+
+        .color = raylib.BLACK,
+        .outline_color = raylib.RAYWHITE,
+    };
 
     fn translate_tile_to_screen(rtile: RaylibRenderer.Tile, x: c_int, y: c_int) ScreenPos {
         const step = rtile.size + rtile.outline_size + rtile.pad;
@@ -60,18 +77,27 @@ pub const Tile = struct {
 };
 
 pub const Piece = struct {
-    outline_size: u8 = 1,
-    outline_color: raylib.Color = raylib.GOLD,
-    color: raylib.Color = raylib.RED,
+    outline_size: u8,
+    outline_color: raylib.Color,
+    color: raylib.Color,
 
-    kinds_factor_size: [Model.Piece.Kind.count]u8 = std.enums.directEnumArray(Model.Piece.Kind, u8, 0, .{
-        .capitan = 1,
-        .minion = 1,
-    }),
-    kinds_div_size: [Model.Piece.Kind.count]u8 = std.enums.directEnumArray(Model.Piece.Kind, u8, 0, .{
-        .capitan = 3,
-        .minion = 6,
-    }),
+    kinds_factor_size: [Model.Piece.Kind.count]u8,
+    kinds_div_size: [Model.Piece.Kind.count]u8,
+
+    pub const default = Piece{
+        .outline_size = 1,
+        .outline_color = raylib.GOLD,
+        .color = raylib.RED,
+
+        .kinds_factor_size = std.enums.directEnumArray(Model.Piece.Kind, u8, 0, .{
+            .capitan = 1,
+            .minion = 1,
+        }),
+        .kinds_div_size = std.enums.directEnumArray(Model.Piece.Kind, u8, 0, .{
+            .capitan = 3,
+            .minion = 6,
+        }),
+    };
 
     fn draw_piece(rpiece: RaylibRenderer.Piece, rtile: RaylibRenderer.Tile, piece: Model.Piece, pconfig: Model.Config.PieceConfig) void {
         const t = rtile.translate_tile_to_screen(piece.pos.x, piece.pos.y);
@@ -185,19 +211,25 @@ pub const Piece = struct {
 };
 
 pub const MapCursor = struct {
-    colors: [State.CursorTag.count][State.MapCursor.Selection.count]raylib.Color = std.enums.directEnumArray(State.CursorTag, [State.MapCursor.Selection.count]raylib.Color, 0, .{
-        .map = std.enums.directEnumArray(State.MapCursor.Selection.@"enum", raylib.Color, 0, .{
-            .none = raylib.MAGENTA,
-            .piece = raylib.ORANGE,
-        }),
-        .time = std.enums.directEnumArray(State.MapCursor.Selection.@"enum", raylib.Color, 0, .{
-            .none = raylib.PINK,
-            .piece = raylib.YELLOW,
-        }),
-    }),
+    colors: [State.CursorTag.count][State.MapCursor.Selection.count]raylib.Color,
+    outline_size: u8,
+    outline_color: raylib.Color,
 
-    outline_size: u8 = 1,
-    outline_color: raylib.Color = raylib.GOLD,
+    pub const default = MapCursor{
+        .colors = std.enums.directEnumArray(State.CursorTag, [State.MapCursor.Selection.count]raylib.Color, 0, .{
+            .map = std.enums.directEnumArray(State.MapCursor.Selection.@"enum", raylib.Color, 0, .{
+                .none = raylib.MAGENTA,
+                .piece = raylib.ORANGE,
+            }),
+            .time = std.enums.directEnumArray(State.MapCursor.Selection.@"enum", raylib.Color, 0, .{
+                .none = raylib.PINK,
+                .piece = raylib.YELLOW,
+            }),
+        }),
+
+        .outline_size = 1,
+        .outline_color = raylib.GOLD,
+    };
 
     fn draw_map_cursor_rect(rmcursor: RaylibRenderer.MapCursor, rtile: RaylibRenderer.Tile, t: ScreenPos, cursor_color: raylib.Color) void {
         const diff = rtile.size / 16;
@@ -263,7 +295,11 @@ pub const MapCursor = struct {
 };
 
 pub const Path = struct {
-    color: raylib.Color = raylib.GREEN,
+    color: raylib.Color,
+
+    pub const default = Path{
+        .color = raylib.GREEN,
+    };
 
     fn draw_path(rpath: RaylibRenderer.Path, rtile: RaylibRenderer.Tile, t: ScreenPos, path: []const Model.Direction) void {
         const half_tile_size = rtile.size / 2;
