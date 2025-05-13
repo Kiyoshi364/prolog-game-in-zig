@@ -20,12 +20,19 @@ windows: [Window.Tag.count]Window = std.enums.directEnumArray(Window.Tag, Window
         .width = 592,
         .height = 600,
     },
+    .timeline = .{
+        .x = 592,
+        .y = 0,
+        .width = 208,
+        .height = 600,
+    },
 }),
 
 // Immutable State
 tile: Tile,
 piece: Piece,
 map_cursor: MapCursor,
+timestate: TimeState,
 // TODO: time_cursor: TimeCursor,
 path: Path,
 
@@ -35,6 +42,7 @@ pub const default = RaylibRenderer{
     .tile = Tile.default,
     .piece = Piece.default,
     .map_cursor = MapCursor.default,
+    .timestate = TimeState.default,
     .path = Path.default,
 };
 
@@ -53,6 +61,11 @@ pub fn draw(in_renderer: RaylibRenderer, state: State, model_config: Model.Confi
     renderer.draw_map_cursor(state.map_cursor, state.active_cursor);
 
     renderer.end_window_mode(.board);
+    renderer.begin_window_mode(.timeline);
+
+    renderer.draw_timeline(state.time_cursor, state.active_cursor);
+
+    renderer.end_window_mode(.timeline);
 
     raylib.DrawFPS(0, raylib.GetScreenHeight() - 16);
     raylib.EndDrawing();
@@ -77,6 +90,7 @@ pub const Window = struct {
 
     pub const Tag = enum {
         board,
+        timeline,
 
         pub const count = @typeInfo(@This()).@"enum".fields.len;
     };
@@ -360,6 +374,66 @@ pub const MapCursor = struct {
     }
 };
 
+pub const TimeState = struct {
+    width: u8,
+    height: u8,
+    initial_pad: u8,
+    pad: u8,
+    outline_size: u8,
+
+    color: [State.CursorTag.count][Highlight.count]raylib.Color,
+    outline_color: raylib.Color,
+
+    pub const default = TimeState{
+        .width = 128,
+        .height = 32,
+        .initial_pad = 8,
+        .pad = 8,
+        .outline_size = 1,
+
+        .color = std.enums.directEnumArray(State.CursorTag, [Highlight.count]raylib.Color, 0, .{
+            // TODO: change color
+            .map = std.enums.directEnumArray(Highlight, raylib.Color, 0, .{
+                .unrelated = raylib.BLACK,
+                .ancestral = raylib.SKYBLUE,
+                .parent = raylib.BLUE,
+                .current = raylib.RED,
+                .child = raylib.PINK,
+                .descendant = raylib.PURPLE,
+            }),
+            .time = std.enums.directEnumArray(Highlight, raylib.Color, 0, .{
+                .unrelated = raylib.BLACK,
+                .ancestral = raylib.SKYBLUE,
+                .parent = raylib.BLUE,
+                .current = raylib.RED,
+                .child = raylib.PINK,
+                .descendant = raylib.PURPLE,
+            }),
+        }),
+        .outline_color = raylib.RAYWHITE,
+    };
+
+    pub const Highlight = enum {
+        unrelated,
+        ancestral,
+        parent,
+        current,
+        child,
+        descendant,
+
+        pub const count = @typeInfo(@This()).@"enum".fields.len;
+    };
+
+    fn draw_timestate(rtimestate: *const RaylibRenderer.TimeState, idx: usize, active_cursor: State.CursorTag, highlight: RaylibRenderer.TimeState.Highlight) void {
+        const renderer = @as(*const RaylibRenderer, @alignCast(@fieldParentPtr("timestate", rtimestate)));
+
+        const color = rtimestate.color[@intFromEnum(active_cursor)][@intFromEnum(highlight)];
+        const x = rtimestate.initial_pad;
+        const y = rtimestate.initial_pad + @as(c_int, @intCast(idx)) * (rtimestate.pad + rtimestate.height);
+        renderer.draw_rect_outline(x, y, rtimestate.width, rtimestate.height, color, rtimestate.outline_size, rtimestate.outline_color);
+    }
+};
+
 pub const Path = struct {
     color: raylib.Color,
 
@@ -447,6 +521,16 @@ fn draw_map_cursor(renderer: RaylibRenderer, map_cursor: State.MapCursor, active
     }
 
     renderer.map_cursor.draw_map_cursor_rect(t, cursor_color);
+}
+
+fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active_cursor: State.CursorTag) void {
+    for (0..time_cursor.model_tree.state_slice().len) |i| {
+        const highlight = @as(RaylibRenderer.TimeState.Highlight, if (time_cursor.model_idx == i)
+            .current
+        else
+            .unrelated);
+        renderer.timestate.draw_timestate(i, active_cursor, highlight);
+    }
 }
 
 ///////////////////////// Raylib Abstraction Interface /////////////////////////
