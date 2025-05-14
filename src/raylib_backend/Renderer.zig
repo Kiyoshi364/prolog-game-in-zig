@@ -379,6 +379,7 @@ pub const TimeState = struct {
     height: u8,
     initial_pad: u8,
     pad: u8,
+    indent: u8,
     outline_size: u8,
 
     color: [State.CursorTag.count][Highlight.count]raylib.Color,
@@ -389,6 +390,7 @@ pub const TimeState = struct {
         .height = 32,
         .initial_pad = 8,
         .pad = 8,
+        .indent = 16,
         .outline_size = 1,
 
         .color = std.enums.directEnumArray(State.CursorTag, [Highlight.count]raylib.Color, 0, .{
@@ -427,13 +429,15 @@ pub const TimeState = struct {
         pub const count = @typeInfo(@This()).@"enum".fields.len;
     };
 
-    fn draw_timestate(rtimestate: *const RaylibRenderer.TimeState, idx: usize, active_cursor: State.CursorTag, highlight: RaylibRenderer.TimeState.Highlight) void {
+    // TODO: do something with the input to get to this state
+    fn draw_timestate(rtimestate: *const RaylibRenderer.TimeState, idx: usize, active_cursor: State.CursorTag, highlight: RaylibRenderer.TimeState.Highlight, indent: c_int) void {
         const renderer = @as(*const RaylibRenderer, @alignCast(@fieldParentPtr("timestate", rtimestate)));
 
         const color = rtimestate.color[@intFromEnum(active_cursor)][@intFromEnum(highlight)];
-        const x = rtimestate.initial_pad;
+        const x = rtimestate.initial_pad + indent * rtimestate.indent;
         const y = rtimestate.initial_pad + @as(c_int, @intCast(idx)) * (rtimestate.pad + rtimestate.height);
-        renderer.draw_rect_outline(x, y, rtimestate.width, rtimestate.height, color, rtimestate.outline_size, rtimestate.outline_color);
+        const width = rtimestate.width - indent * rtimestate.indent;
+        renderer.draw_rect_outline(x, y, width, rtimestate.height, color, rtimestate.outline_size, rtimestate.outline_color);
     }
 };
 
@@ -574,7 +578,7 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
     };
 
     for (0..time_cursor.model_tree.state_slice().len) |i| {
-        renderer.timestate.draw_timestate(i, active_cursor, highlights[i]);
+        renderer.timestate.draw_timestate(i, active_cursor, highlights[i], @intCast(i));
     }
 }
 
