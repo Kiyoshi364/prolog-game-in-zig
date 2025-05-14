@@ -197,7 +197,6 @@ pub const constants = struct {
     const max_model_depth = 4;
     const ModelDepth = u4;
     const max_model_storage = 31;
-    const ModelIdx = u5;
 };
 
 pub const CursorTag = enum {
@@ -373,11 +372,12 @@ pub const MapCursor = struct {
 
 pub const TimeCursor = struct {
     model_tree: ModelTree,
-    model_idx: constants.ModelIdx,
-    old_model_idx: constants.ModelIdx,
+    model_idx: ModelIdx,
+    old_model_idx: ModelIdx,
 
     // TODO: use Updag instead of Uptree
     const ModelTree = utils.UptreeWithBuffer(Model, Model.Input, constants.max_model_storage, constants.max_model_storage);
+    const ModelIdx = ModelTree.StateIdx;
 
     pub fn with_root(the_root_model: Model) TimeCursor {
         return .{
@@ -415,7 +415,7 @@ pub const TimeCursor = struct {
 
     // TODO: Use SIMD (@Vector)
     // TODO: sort model_tree to search less
-    fn moved(cursor: TimeCursor, dir: Model.Direction) ?constants.ModelIdx {
+    fn moved(cursor: TimeCursor, dir: Model.Direction) ?ModelIdx {
         const parents = cursor.model_tree.parent_states_slice();
         const curr = cursor.model_idx;
         return switch (dir) {
