@@ -13,6 +13,8 @@ const raylib = @cImport({
 // Mutable State
 curr_offset: ScreenPos = ScreenPos.origin,
 curr_window: ?Window.Tag = null,
+
+// Immutable State
 windows: [Window.Tag.count]Window = std.enums.directEnumArray(Window.Tag, Window, 0, .{
     .board = .{
         .x = 0,
@@ -27,8 +29,6 @@ windows: [Window.Tag.count]Window = std.enums.directEnumArray(Window.Tag, Window
         .height = 600,
     },
 }),
-
-// Immutable State
 tile: Tile,
 piece: Piece,
 map_cursor: MapCursor,
@@ -398,7 +398,8 @@ pub const TimeState = struct {
                 .ancestral = raylib.SKYBLUE,
                 .parent = raylib.BLUE,
                 .current = raylib.RED,
-                .child = raylib.PINK,
+                .sibling = raylib.DARKGREEN,
+                .child = raylib.MAGENTA,
                 .descendant = raylib.PURPLE,
             }),
             .time = std.enums.directEnumArray(Highlight, raylib.Color, 0, .{
@@ -406,7 +407,8 @@ pub const TimeState = struct {
                 .ancestral = raylib.SKYBLUE,
                 .parent = raylib.BLUE,
                 .current = raylib.RED,
-                .child = raylib.PINK,
+                .sibling = raylib.DARKGREEN,
+                .child = raylib.MAGENTA,
                 .descendant = raylib.PURPLE,
             }),
         }),
@@ -418,6 +420,7 @@ pub const TimeState = struct {
         ancestral,
         parent,
         current,
+        sibling,
         child,
         descendant,
 
@@ -524,12 +527,54 @@ fn draw_map_cursor(renderer: RaylibRenderer, map_cursor: State.MapCursor, active
 }
 
 fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active_cursor: State.CursorTag) void {
+    const Idx = @TypeOf(time_cursor.model_tree).StateIdx;
+    const model_tree = time_cursor.model_tree;
+    const model_idx = time_cursor.model_idx;
+
+    const parents = model_tree.parent_states_slice();
+    const len = parents.len;
+
+    var highlights_buffer = [_]RaylibRenderer.TimeState.Highlight{.unrelated} ** @TypeOf(time_cursor.model_tree).state_capacity;
+    const highlights = highlights: {
+        {
+            var it = model_idx;
+            var curr_highlight = RaylibRenderer.TimeState.Highlight.current;
+            while (it != parents[it]) : (it = parents[it]) {
+                highlights_buffer[it] = curr_highlight;
+                curr_highlight = switch (curr_highlight){
+                    .current => .parent,
+                    .parent => .ancestral,
+                    .ancestral => .ancestral,
+                    else => unreachable,
+                };
+            }
+            highlights_buffer[it] = curr_highlight;
+        }
+        for (0..len) |i| {
+            if (highlights_buffer[i] != .unrelated) {
+                continue;
+            }
+            var it = @as(Idx, @intCast(i));
+            var depth = @as(Idx, 0);
+            while (it != parents[it] and it != model_idx) : (it = parents[it]) {
+                depth += 1;
+            }
+            highlights_buffer[i] = if (it == model_idx)
+                if (depth <= 1)
+                    .child
+                else
+                    .descendant
+            else
+                if (parents[model_idx] == parents[i])
+                    .sibling
+                else
+                    .unrelated;
+        }
+        break :highlights highlights_buffer[0..len];
+    };
+
     for (0..time_cursor.model_tree.state_slice().len) |i| {
-        const highlight = @as(RaylibRenderer.TimeState.Highlight, if (time_cursor.model_idx == i)
-            .current
-        else
-            .unrelated);
-        renderer.timestate.draw_timestate(i, active_cursor, highlight);
+        renderer.timestate.draw_timestate(i, active_cursor, highlights[i]);
     }
 }
 

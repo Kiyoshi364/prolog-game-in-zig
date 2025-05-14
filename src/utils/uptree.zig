@@ -68,9 +68,11 @@ pub fn UptreeWithBuffer(
 
         const Self = @This();
 
+        pub const state_capacity = state_cap;
         pub const StateIdx = std.math.IntFittingRange(0, state_cap);
         pub const StateBuffer = Buffer(State, StateIdx, state_cap);
 
+        pub const input_capacity = input_cap;
         pub const InputIdx = std.math.IntFittingRange(0, input_cap);
         pub const InputBuffer = Buffer(Input, InputIdx, input_cap);
 
