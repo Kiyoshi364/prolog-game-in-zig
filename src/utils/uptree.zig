@@ -397,7 +397,7 @@ pub fn nosort_idx_buffer(comptime Int: type, comptime len: comptime_int) [len]In
 }
 
 pub fn sorted_indices_by_compare(comptime Int: type, comptime len: comptime_int, keys: []const Int, comptime compare: fn ([]const Int, Int, Int) bool, buf: *[len]Int) []Int {
-    const idxs = buf[0 .. keys.len];
+    const idxs = buf[0..keys.len];
     std.mem.sort(Int, idxs, keys, compare);
     return idxs;
 }
@@ -431,7 +431,7 @@ test "UptreeWithBuffer: parents_state_id" {
         .{
             .p = &.{ 0, 0, 0, 1, 1, 2, 3, 5 },
             .expecteds = &.{
-                &.{ 0 },
+                &.{0},
                 &.{ 0, 1 },
                 &.{ 0, 2 },
                 &.{ 0, 1, 3 },
@@ -444,7 +444,7 @@ test "UptreeWithBuffer: parents_state_id" {
         .{
             .p = &[_]u8{ 0, 0, 1, 2, 3, 2, 5, 5, 2, 7 },
             .expecteds = &.{
-                &.{ 0 },
+                &.{0},
                 &.{ 0, 1 },
                 &.{ 0, 1, 2 },
                 &.{ 0, 1, 2, 3 },

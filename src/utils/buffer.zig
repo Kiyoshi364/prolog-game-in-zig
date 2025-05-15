@@ -65,13 +65,13 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
                 return false;
             }
             return for (as, bs, 0..) |ita, itb, i| {
-                const eq = if (@hasDecl(T, "eql") and @TypeOf(T.eql) == fn(T, T) bool)
+                const eq = if (@hasDecl(T, "eql") and @TypeOf(T.eql) == fn (T, T) bool)
                     ita.eql(itb)
-                else std.meta.eql(ita, itb);
+                else
+                    std.meta.eql(ita, itb);
                 if (!eq) {
                     break false;
                 }
-
             } else true;
         }
 

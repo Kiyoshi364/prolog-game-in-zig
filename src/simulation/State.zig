@@ -111,10 +111,9 @@ pub fn get_root_model_mut(state: *State) *Model {
 }
 
 pub fn check(state: State, model_config: Model.Config) bool {
-    if (
-        state.time_cursor.model_idx < state.time_cursor.model_tree.state_slice().len
-        and state.time_cursor.old_model_idx < state.time_cursor.model_tree.state_slice().len
-    ) {
+    if (state.time_cursor.model_idx < state.time_cursor.model_tree.state_slice().len and
+        state.time_cursor.old_model_idx < state.time_cursor.model_tree.state_slice().len)
+    {
         // Nothing
     } else {
         return false;
@@ -481,7 +480,7 @@ pub const TimeCursor = struct {
                     break @intCast(i);
                 }
             } else null,
-            .right => for (parents[curr + 1..], (curr + 1)..) |p, i| {
+            .right => for (parents[curr + 1 ..], (curr + 1)..) |p, i| {
                 std.debug.assert(curr != i);
                 if (parents[curr] == p and p != i) {
                     break @intCast(i);
@@ -548,7 +547,8 @@ pub const TimeCursor = struct {
                     };
                 },
             }
-        else null;
+        else
+            null;
     }
 };
 

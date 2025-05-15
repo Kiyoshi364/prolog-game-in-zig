@@ -476,7 +476,7 @@ pub const Path = struct {
 
 fn begin_window_mode(renderer: *RaylibRenderer, tag: Window.Tag) void {
     std.debug.assert(renderer.curr_window == null);
-    const window =  renderer.windows[@intFromEnum(tag)];
+    const window = renderer.windows[@intFromEnum(tag)];
     renderer.*.curr_offset = window.offset_pos();
     renderer.*.curr_window = tag;
     window.begin_scissor_mode();
@@ -484,7 +484,7 @@ fn begin_window_mode(renderer: *RaylibRenderer, tag: Window.Tag) void {
 
 fn end_window_mode(renderer: *RaylibRenderer, tag: Window.Tag) void {
     std.debug.assert(renderer.curr_window == tag);
-    const window =  renderer.windows[@intFromEnum(tag)];
+    const window = renderer.windows[@intFromEnum(tag)];
     window.end_scissor_mode();
     renderer.*.curr_offset = ScreenPos.origin;
     renderer.*.curr_window = null;
@@ -545,7 +545,7 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
             var curr_highlight = RaylibRenderer.TimeState.Highlight.current;
             while (it != parents[it]) : (it = parents[it]) {
                 highlights_buffer[it] = curr_highlight;
-                curr_highlight = switch (curr_highlight){
+                curr_highlight = switch (curr_highlight) {
                     .current => .parent,
                     .parent => .ancestral,
                     .ancestral => .ancestral,
@@ -568,11 +568,10 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
                     .child
                 else
                     .descendant
+            else if (parents[model_idx] == parents[i])
+                .sibling
             else
-                if (parents[model_idx] == parents[i])
-                    .sibling
-                else
-                    .unrelated;
+                .unrelated;
         }
         break :highlights highlights_buffer[0..len];
     };
