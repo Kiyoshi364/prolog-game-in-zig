@@ -578,7 +578,8 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
     };
 
     for (0..time_cursor.model_tree.state_slice().len) |i| {
-        renderer.timestate.draw_timestate(i, active_cursor, highlights[i], @intCast(i));
+        // TODO: use indent
+        renderer.timestate.draw_timestate(i, active_cursor, highlights[i], 0);
     }
 }
 
