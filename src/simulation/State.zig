@@ -147,8 +147,6 @@ pub fn check(state: State, model_config: Model.Config) bool {
         const sorted_idxs = state.time_cursor.model_tree.sorted_state_indices_by_leftchild(&buf);
         for (sorted_idxs, 0..) |idx, i| {
             if (idx == i) {} else {
-                std.debug.print("parents    : {any}\n", .{state.time_cursor.model_tree.parent_states_slice()});
-                std.debug.print("sorted_idxs: {any}\n", .{sorted_idxs});
                 return false;
             }
         }
