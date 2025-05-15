@@ -208,6 +208,48 @@ pub fn UptreeWithBuffer(
         pub fn get_parent_input(self: Self, idx: InputIdx) ?InputIdx {
             return self.parent_inputs_slice()[idx];
         }
+
+        pub fn nosort_stateidx_buffer(self: Self) StateIdxArray {
+            _ = self;
+            return nosort_idx_buffer(StateIdx, state_capacity);
+        }
+
+        pub fn calc_state_id(parents: []const StateIdx, idx: StateIdx, buf: *StateIdxArray) []StateIdx {
+            return parents_state_id(StateIdx, state_capacity, parents, idx, buf);
+        }
+
+        pub fn get_state_id(self: Self, idx: StateIdx, buf: *StateIdxArray) []StateIdx {
+            return calc_state_id(self.parent_states_slice(), idx, buf);
+        }
+
+        pub fn sorted_state_indices_by_leftchild(self: Self, buf: *StateIdxArray) []StateIdx {
+            const p = self.parent_states_slice();
+            return sorted_indices_by_compare(StateIdx, state_capacity, p, leftchild_less_than(StateIdx, state_capacity), buf);
+        }
+
+        pub fn sorted_with(self: Self, idxs: []const StateIdx) Self {
+            const len = idxs.len;
+            const self_states = self.state_slice();
+            const self_parent_states = self.parent_states_slice();
+            const self_parent_inputs = self.parent_inputs_slice();
+
+            var state_buffer = StateBuffer{
+                .size = @intCast(self_states.len),
+            };
+            var parent_states = @as(StateIdxArray, undefined);
+            var parent_inputs = @as(InputIdxArray, undefined);
+            for (idxs, state_buffer.buffer[0..len], parent_states[0..len], parent_inputs[0..len]) |idx, *s, *ps, *pi| {
+                s.* = self_states[idx];
+                ps.* = self_parent_states[idx];
+                pi.* = self_parent_inputs[idx];
+            }
+            return .{
+                .state_buffer = state_buffer,
+                .input_buffer = self.input_buffer,
+                .parent_states = parent_states,
+                .parent_inputs = parent_inputs,
+            };
+        }
     };
 }
 

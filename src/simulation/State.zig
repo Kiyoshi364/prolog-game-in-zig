@@ -53,6 +53,7 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
                 break :out_anims if (model.step(model_input, model_config, &varout_model)) |anim_input| blk: {
                     // TODO: log/notify out of time traveling memory
                     state.time_cursor.discover_transition(model_input, varout_model, &varout_time_cursor) orelse unreachable;
+                    varout_time_cursor.sort_inplace();
                     break :blk state.update_animations(anim_input);
                 } else blk: {
                     // TODO: log/notify invalid move
@@ -117,6 +118,18 @@ pub fn check(state: State) bool {
         // Nothing
     } else {
         return false;
+    }
+
+    {
+        var buf = state.time_cursor.model_tree.nosort_stateidx_buffer();
+        const sorted_idxs = state.time_cursor.model_tree.sorted_state_indices_by_leftchild(&buf);
+        for (sorted_idxs, 0..) |idx, i| {
+            if (idx == i) {} else {
+                std.debug.print("parents    : {any}\n", .{state.time_cursor.model_tree.parent_states_slice()});
+                std.debug.print("sorted_idxs: {any}\n", .{sorted_idxs});
+                return false;
+            }
+        }
     }
 
     if (0 < state.anims.size) {
@@ -410,6 +423,16 @@ pub const TimeCursor = struct {
             .model_tree = reg_state.self,
             .model_idx = reg_state.idx,
             .old_model_idx = reg_state.idx,
+        };
+    }
+
+    fn sort_inplace(cursor: *TimeCursor) void {
+        var buf = cursor.model_tree.nosort_stateidx_buffer();
+        const sorted_idxs = cursor.model_tree.sorted_state_indices_by_leftchild(&buf);
+        cursor.* = .{
+            .model_tree = cursor.model_tree.sorted_with(sorted_idxs),
+            .model_idx = sorted_idxs[cursor.model_idx],
+            .old_model_idx = sorted_idxs[cursor.old_model_idx],
         };
     }
 
