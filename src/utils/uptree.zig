@@ -240,7 +240,11 @@ pub fn UptreeWithBuffer(
             var parent_inputs = @as(InputIdxArray, undefined);
             for (idxs, state_buffer.buffer[0..len], parent_states[0..len], parent_inputs[0..len]) |idx, *s, *ps, *pi| {
                 s.* = self_states[idx];
-                ps.* = self_parent_states[idx];
+                ps.* = for (idxs, 0..) |jdx, j| {
+                    if (self_parent_states[idx] == jdx) {
+                        break @intCast(j);
+                    }
+                } else unreachable;
                 pi.* = self_parent_inputs[idx];
             }
             return .{

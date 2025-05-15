@@ -121,6 +121,7 @@ pub fn check(state: State) bool {
     }
 
     {
+        // Check model_tree is sorted by depth first order traversal
         var buf = state.time_cursor.model_tree.nosort_stateidx_buffer();
         const sorted_idxs = state.time_cursor.model_tree.sorted_state_indices_by_leftchild(&buf);
         for (sorted_idxs, 0..) |idx, i| {
