@@ -211,7 +211,7 @@ pub fn UptreeWithBuffer(
     };
 }
 
-test "UptreeWithBuffer" {
+test "UptreeWithBuffer: tree building" {
     const state_cap = 10;
     const input_cap = 20;
     const State = u8;
@@ -326,6 +326,120 @@ test "UptreeWithBuffer" {
     try std.testing.expectEqual(5, tree.get_parent_input(1));
     try std.testing.expectEqual(0, tree.get_parent_input(4));
     try std.testing.expectEqual(15, tree.get_parent_input(7));
+}
+
+pub fn parents_state_id(comptime Int: type, comptime len: comptime_int, parents: []const Int, idx: Int, buf: *[len]Int) []Int {
+    std.debug.assert(@typeInfo(Int) == .int);
+
+    var it = idx;
+    var i = @as(Int, buf.*.len);
+    while (it != parents[it]) : (it = parents[it]) {
+        i -= 1;
+        buf[i] = it;
+    }
+    i -= 1;
+    buf[i] = it;
+    return buf[i..];
+}
+
+pub fn nosort_idx_buffer(comptime Int: type, comptime len: comptime_int) [len]Int {
+    var buf = @as([len]Int, undefined);
+    for (&buf, 0..) |*it, i| {
+        it.* = @intCast(i);
+    }
+    return buf;
+}
+
+pub fn sorted_indices_by_compare(comptime Int: type, comptime len: comptime_int, keys: []const Int, comptime compare: fn ([]const Int, Int, Int) bool, buf: *[len]Int) []Int {
+    const idxs = buf[0 .. keys.len];
+    std.mem.sort(Int, idxs, keys, compare);
+    return idxs;
+}
+
+pub fn leftchild_less_than(comptime Int: type, comptime len: comptime_int) fn ([]const Int, Int, Int) bool {
+    const s = struct {
+        fn func(parents: []const Int, a: Int, b: Int) bool {
+            var a_buf = @as([len]Int, undefined);
+            var b_buf = @as([len]Int, undefined);
+
+            const a_path = parents_state_id(Int, len, parents, a, &a_buf);
+            const b_path = parents_state_id(Int, len, parents, b, &b_buf);
+            const min_len = @min(a_path.len, b_path.len);
+
+            return for (a_path[0..min_len], b_path[0..min_len]) |a_it, b_it| {
+                if (a_it == b_it) {
+                    continue;
+                } else {
+                    break a_it < b_it;
+                }
+            } else a_path.len < b_path.len;
+        }
+    };
+    return s.func;
+}
+
+test "UptreeWithBuffer: parents_state_id" {
+    const Test = struct { p: []const u8, expecteds: []const []const u8 };
+    const len = 32;
+    const tests = [_]Test{
+        .{
+            .p = &.{ 0, 0, 0, 1, 1, 2, 3, 5 },
+            .expecteds = &.{
+                &.{ 0 },
+                &.{ 0, 1 },
+                &.{ 0, 2 },
+                &.{ 0, 1, 3 },
+                &.{ 0, 1, 4 },
+                &.{ 0, 2, 5 },
+                &.{ 0, 1, 3, 6 },
+                &.{ 0, 2, 5, 7 },
+            },
+        },
+        .{
+            .p = &[_]u8{ 0, 0, 1, 2, 3, 2, 5, 5, 2, 7 },
+            .expecteds = &.{
+                &.{ 0 },
+                &.{ 0, 1 },
+                &.{ 0, 1, 2 },
+                &.{ 0, 1, 2, 3 },
+                &.{ 0, 1, 2, 3, 4 },
+                &.{ 0, 1, 2, 5 },
+                &.{ 0, 1, 2, 5, 6 },
+                &.{ 0, 1, 2, 5, 7 },
+                &.{ 0, 1, 2, 8 },
+                &.{ 0, 1, 2, 5, 7, 9 },
+            },
+        },
+    };
+
+    var buf = @as([len]u8, undefined);
+    for (tests) |t| {
+        for (t.expecteds, 0..t.p.len) |expected_id, i| {
+            const id = parents_state_id(u8, len, t.p, @intCast(i), &buf);
+            try std.testing.expectEqualSlices(u8, expected_id, id);
+        }
+    }
+}
+
+test "UptreeWithBuffer: leftchild sorting" {
+    const Test = struct { p: []const u8, expected: []const u8 };
+    const len = 16;
+    const tests = [_]Test{
+        .{
+            .p = &[_]u8{ 0, 0, 0, 1, 1, 2, 3, 5 },
+            .expected = &[_]u8{ 0, 1, 3, 6, 4, 2, 5, 7 },
+        },
+        .{
+            .p = &[_]u8{ 0, 0, 1, 2, 3, 2, 5, 5, 2, 7 },
+            .expected = &[_]u8{ 0, 1, 2, 3, 4, 5, 6, 7, 9, 8 },
+        },
+    };
+
+    var buf = nosort_idx_buffer(u8, len);
+    for (tests) |t| {
+        const sorted_idxs = sorted_indices_by_compare(u8, len, t.p, leftchild_less_than(u8, len), &buf);
+        try std.testing.expectEqualSlices(u8, t.expected, sorted_idxs);
+    }
 }
 
 test {
