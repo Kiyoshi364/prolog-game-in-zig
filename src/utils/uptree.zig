@@ -63,8 +63,8 @@ pub fn UptreeWithBuffer(
     return struct {
         state_buffer: StateBuffer,
         input_buffer: InputBuffer,
-        parent_states: [state_cap]StateIdx,
-        parent_inputs: [state_cap]?InputIdx,
+        parent_states: StateIdxArray,
+        parent_inputs: InputIdxArray,
 
         const Self = @This();
 
@@ -72,9 +72,13 @@ pub fn UptreeWithBuffer(
         pub const StateIdx = std.math.IntFittingRange(0, state_cap);
         pub const StateBuffer = Buffer(State, StateIdx, state_cap);
 
+        pub const StateIdxArray = [state_cap]StateIdx;
+
         pub const input_capacity = input_cap;
         pub const InputIdx = std.math.IntFittingRange(0, input_cap);
         pub const InputBuffer = Buffer(Input, InputIdx, input_cap);
+
+        pub const InputIdxArray = [state_cap]?InputIdx;
 
         pub const Parent = struct { input: InputIdx, state: StateIdx };
 
