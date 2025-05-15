@@ -451,10 +451,15 @@ pub const TimeCursor = struct {
     fn sort_inplace(cursor: *TimeCursor) void {
         var buf = cursor.model_tree.nosort_stateidx_buffer();
         const sorted_idxs = cursor.model_tree.sorted_state_indices_by_leftchild(&buf);
+        const new_model_idx = @as(ModelIdx, for (sorted_idxs, 0..) |it, i| {
+            if (cursor.model_idx == it) {
+                break @intCast(i);
+            }
+        } else unreachable);
         cursor.* = .{
             .model_tree = cursor.model_tree.sorted_with(sorted_idxs),
-            .model_idx = sorted_idxs[cursor.model_idx],
-            .old_model_idx = sorted_idxs[cursor.old_model_idx],
+            .model_idx = new_model_idx,
+            .old_model_idx = new_model_idx,
         };
     }
 
