@@ -58,6 +58,23 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
             return .{ .b = self };
         }
 
+        pub fn eql(a: Self, b: Self) bool {
+            const as = a.slice();
+            const bs = b.slice();
+            if (as.len != bs.len) {
+                return false;
+            }
+            return for (as, bs, 0..) |ita, itb, i| {
+                const eq = if (@hasDecl(T, "eql") and @TypeOf(T.eql) == fn(T, T) bool)
+                    ita.eql(itb)
+                else std.meta.eql(ita, itb);
+                if (!eq) {
+                    break false;
+                }
+
+            } else true;
+        }
+
         pub const Builder = struct {
             b: Self = .{},
 

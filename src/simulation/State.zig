@@ -11,7 +11,6 @@ anims: Animations,
 
 const State = @This();
 const Animations = utils.Buffer(Animation, Model.constants.PiecesSize, Model.constants.max_pieces);
-const Path = utils.Buffer(Model.Direction, constants.PathSize, constants.max_path);
 
 pub const empty = State.with_root(Model.empty);
 
@@ -25,10 +24,8 @@ pub fn with_root(the_root_model: Model) State {
 }
 
 pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?State {
-    std.debug.assert(state.check());
+    std.debug.assert(state.check(model_config));
 
-    // std.debug.print("{} {}\n", .{state.time_cursor.model_idx, state.active_cursor});
-    // std.debug.print("{} {}\n", .{state_input.modifier(), state_input});
     const out_state = switch (state.active_cursor) {
         .map => out_state: {
             var varout_active_cursor = @as(CursorTag, undefined);
@@ -97,7 +94,7 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
             };
         },
     };
-    std.debug.assert(out_state.check());
+    std.debug.assert(out_state.check(model_config));
     return out_state;
 }
 
@@ -113,11 +110,35 @@ pub fn get_root_model_mut(state: *State) *Model {
     return state.time_cursor.root_model_mut();
 }
 
-pub fn check(state: State) bool {
-    if (state.time_cursor.model_idx < state.time_cursor.model_tree.state_slice().len) {
+pub fn check(state: State, model_config: Model.Config) bool {
+    if (
+        state.time_cursor.model_idx < state.time_cursor.model_tree.state_slice().len
+        and state.time_cursor.old_model_idx < state.time_cursor.model_tree.state_slice().len
+    ) {
         // Nothing
     } else {
         return false;
+    }
+
+    {
+        // Check model_tree is consistent
+        const models = state.time_cursor.model_tree.state_slice();
+        const inputs = state.time_cursor.model_tree.input_slice();
+        const parent_models = state.time_cursor.model_tree.parent_states_slice();
+        const parent_inputs = state.time_cursor.model_tree.parent_inputs_slice();
+
+        for (models, parent_models, parent_inputs, 0..) |model, p_idx, opt_i_idx, it| {
+            if (p_idx != it) {
+                const parent_model = models[p_idx];
+                const parent_input = inputs[opt_i_idx.?];
+                var next_model = @as(Model, undefined);
+                const opt_anim_input = parent_model.step(parent_input, model_config, &next_model);
+                std.debug.assert(opt_anim_input != null);
+                std.debug.assert(model.eql(next_model));
+            } else {
+                std.debug.assert(opt_i_idx == null);
+            }
+        }
     }
 
     {
@@ -203,9 +224,6 @@ pub const StateInput = struct {
 };
 
 pub const constants = struct {
-    const max_path = 15;
-    const PathSize = u4;
-
     pub const animation_start_timer = 20;
 
     const max_model_depth = 4;
@@ -240,7 +258,7 @@ pub const MapCursor = struct {
         const PieceSelection = struct {
             old_pos: Model.Position,
             piece: Model.Piece,
-            path: Path = .{},
+            path: Model.Path = .{},
         };
 
         // const MenuSelection = struct {};
@@ -257,7 +275,7 @@ pub const MapCursor = struct {
                         var shrinked = false;
                         const old_path_size = new_path.size;
                         break :blk2 for (0..old_path_size) |pre_i| {
-                            const i: constants.PathSize = @intCast(old_path_size - pre_i - 1);
+                            const i: Model.constants.PathSize = @intCast(old_path_size - pre_i - 1);
                             const dir_ = new_path.get(i);
                             switch (dir_) {
                                 .up => y += 1,
@@ -312,7 +330,7 @@ pub const MapCursor = struct {
                     out_cursor.* = .{ .pos = pos, .selection = .none };
                     break :blk .{ .move = .{
                         .piece = piece.piece,
-                        .path = piece.path.slice(),
+                        .path = piece.path,
                     } };
                 },
             };
@@ -416,15 +434,18 @@ pub const TimeCursor = struct {
 
     fn discover_transition(cursor: TimeCursor, input: Model.Input, next_model: Model, out_cursor: *TimeCursor) ?void {
         const reg_input = cursor.model_tree.find_input_or_register(input) orelse return null;
+        std.debug.assert(std.meta.eql(reg_input.self.input_slice()[reg_input.idx], input));
         const reg_state = reg_input.self.register_state(
             next_model,
             .{ .input = reg_input.idx, .state = cursor.model_idx },
         ) orelse return null;
+        std.debug.assert(std.meta.eql(reg_state.self.input_slice()[reg_input.idx], input));
         out_cursor.* = .{
             .model_tree = reg_state.self,
             .model_idx = reg_state.idx,
             .old_model_idx = reg_state.idx,
         };
+        std.debug.assert(std.meta.eql(out_cursor.model_tree.input_slice()[reg_input.idx], input));
     }
 
     fn sort_inplace(cursor: *TimeCursor) void {
@@ -538,8 +559,8 @@ pub const Animation = struct {
         pub const Move = struct {
             curr_pos: Model.Position,
             timer: u8 = constants.animation_start_timer,
-            path: Path = undefined,
-            path_idx: constants.PathSize = 0,
+            path: Model.Path = undefined,
+            path_idx: Model.constants.PathSize = 0,
 
             fn tick(move: Move) ?Move {
                 return if (0 < move.timer)
@@ -581,12 +602,12 @@ pub const Animation = struct {
 
     fn fromAnimationInput(anim_input: Model.AnimationInput) ?Animation {
         return switch (anim_input) {
-            .move => |move| if (0 < move.path.len)
+            .move => |move| if (0 < move.path.slice().len)
                 .{
                     .piece_id = move.piece.id,
                     .state = .{ .move = .{
                         .curr_pos = move.piece.pos,
-                        .path = (Path{}).push_slice(move.path),
+                        .path = move.path,
                     } },
                 }
             else

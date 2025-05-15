@@ -26,7 +26,7 @@ pub fn step(model: Model, model_input: Input, config: Config, out_model: *Model)
             }
 
             const new_pos = move.piece.pos.move_many(
-                move.path,
+                move.path.slice(),
                 config.map.bounds,
             ) orelse break :blk null;
 
@@ -67,6 +67,10 @@ pub fn check(model: Model) bool {
         }
     }
     return true;
+}
+
+pub fn eql(a: Model, b: Model) bool {
+    return a.pieces.eql(b.pieces) and a.piece_genid == b.piece_genid;
 }
 
 pub const Config = struct {
@@ -127,7 +131,7 @@ pub const Input = union(enum) {
 
     pub const Move = struct {
         piece: Piece,
-        path: []const Direction,
+        path: Path,
 
         pub fn piece_id(move: Move) constants.PieceID {
             return move.piece.id;
@@ -252,6 +256,8 @@ pub const Piece = struct {
     }
 };
 
+pub const Path = utils.Buffer(Model.Direction, constants.PathSize, constants.max_path);
+
 pub const constants = struct {
     pub const max_map_storage = 256;
     pub const max_pieces = 128;
@@ -260,6 +266,9 @@ pub const constants = struct {
     pub const PieceID = u32;
 
     pub const Energy = u3;
+
+    pub const max_path = 15;
+    pub const PathSize = u4;
 };
 
 test "Model.refAllDeclsRecursive" {
