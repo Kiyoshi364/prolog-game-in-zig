@@ -254,6 +254,54 @@ pub fn UptreeWithBuffer(
                 .parent_inputs = parent_inputs,
             };
         }
+
+        // TODO: use SIMD
+        pub fn state_left_siblings(self: Self, buf: *StateIdxArray) []StateIdx {
+            const p = self.parent_states_slice();
+            const len = p.len;
+            const lefts = buf[0..len];
+            for (lefts, p, 0..) |*out, pi, i| {
+                out.* = if (pi == i)
+                    for (0..i) |pre_j| {
+                        const j = i - pre_j - 1;
+                        const pj = p[j];
+                        if (pj == j) {
+                            break @intCast(j);
+                        }
+                    } else @intCast(i)
+                else
+                    for (0..i) |pre_j| {
+                        const j = i - pre_j - 1;
+                        const pj = p[j];
+                        if (pi == pj and pj != j) {
+                            break @intCast(j);
+                        }
+                    } else @intCast(i);
+            }
+            return lefts;
+        }
+
+        // TODO: use SIMD
+        pub fn state_right_siblings(self: Self, buf: *StateIdxArray) []StateIdx {
+            const p = self.parent_states_slice();
+            const len = p.len;
+            const rights = buf[0..len];
+            for (rights, p, 0..) |*out, pi, i| {
+                out.* = if (pi == i)
+                    for (p[i+1..], i+1..) |pj, j| {
+                        if (pj == j) {
+                            break @intCast(j);
+                        }
+                    } else @intCast(i)
+                else
+                    for (p[i+1..], i+1..) |pj, j| {
+                        if (pi == pj and pj != j) {
+                            break @intCast(j);
+                        }
+                    } else @intCast(i);
+            }
+            return rights;
+        }
     };
 }
 
@@ -372,6 +420,22 @@ test "UptreeWithBuffer: tree building" {
     try std.testing.expectEqual(5, tree.get_parent_input(1));
     try std.testing.expectEqual(0, tree.get_parent_input(4));
     try std.testing.expectEqual(15, tree.get_parent_input(7));
+
+    {
+        var buf = @as(Tree.StateIdxArray, undefined);
+
+        try std.testing.expectEqualSlices(
+            Tree.StateIdx,
+            &.{ 0, 1, 2, 2, 4, 4, 6, 6, 8, 8 },
+            tree.state_left_siblings(&buf),
+        );
+
+        try std.testing.expectEqualSlices(
+            Tree.StateIdx,
+            &.{ 0, 1, 3, 3, 5, 5, 7, 7, 9, 9 },
+            tree.state_right_siblings(&buf),
+        );
+    }
 }
 
 pub fn parents_state_id(comptime Int: type, comptime len: comptime_int, parents: []const Int, idx: Int, buf: *[len]Int) []Int {
