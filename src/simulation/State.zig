@@ -460,29 +460,44 @@ pub const TimeCursor = struct {
         };
     }
 
-    // TODO: Use SIMD (@Vector)
-    // TODO: sort model_tree to search less
+    // TODO: try SIMD/@Vector
     fn moved(cursor: TimeCursor, dir: Model.Direction) ?ModelIdx {
         const parents = cursor.model_tree.parent_states_slice();
         const curr = cursor.model_idx;
         return switch (dir) {
-            .up => parents[curr],
-            .left => for (0..curr) |pre_i| {
+            .up => if (parents[curr] == curr) null else parents[curr],
+            .left => if (parents[curr] == curr)
+                for (0..curr) |pre_i| {
+                    const i = curr - pre_i - 1;
+                    const p = parents[i];
+                    std.debug.assert(curr != i);
+                    if (p == i) {
+                        break @intCast(i);
+                    }
+                } else null
+            else for (0..curr) |pre_i| {
                 const i = curr - pre_i - 1;
                 const p = parents[i];
                 std.debug.assert(curr != i);
-                if (parents[cursor.model_idx] == p and p != i and i != cursor.model_idx) {
+                if (parents[curr] == p and p != i) {
                     break @intCast(i);
                 }
             } else null,
             .down => for (parents, 0..) |p, i| {
-                if (cursor.model_idx == p and i != p) {
+                if (curr == p and i != p) {
                     break @intCast(i);
                 }
             } else null,
-            .right => for (parents[curr + 1 ..], (curr + 1)..) |p, i| {
+            .right => if (parents[curr] == curr)
+                for (parents[curr + 1 ..], curr + 1..) |p, i| {
+                    std.debug.assert(curr != i);
+                    if (p == i) {
+                        break @intCast(i);
+                    }
+                } else null
+            else for (parents[curr + 1 ..], curr + 1..) |p, i| {
                 std.debug.assert(curr != i);
-                if (parents[curr] == p and p != i) {
+                if (parents[curr] == p and p != i and i != curr) {
                     break @intCast(i);
                 }
             } else null,
