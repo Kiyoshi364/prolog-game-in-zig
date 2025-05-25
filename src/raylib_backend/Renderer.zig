@@ -244,7 +244,7 @@ pub const Piece = struct {
         const rtile = renderer.tile;
 
         const t = @as(ScreenPos, switch (anim.state) {
-            .move => |move| blk: {
+            .move => |move| if (move.path_idx < move.path.size) blk: {
                 const a = move.path.get(move.path_idx).toAddData();
                 const t0 = rtile.translate_tile_to_screen(move.curr_pos.x, move.curr_pos.y);
 
@@ -259,7 +259,7 @@ pub const Piece = struct {
                     .{ .x = t0.x + @as(c_int, ax), .y = t0.y + @as(c_int, ay) }
                 else
                     .{ .x = t0.x - @as(c_int, ax), .y = t0.y - @as(c_int, ay) };
-            },
+            } else rtile.translate_tile_to_screen(move.curr_pos.x, move.curr_pos.y),
         });
         rpiece.draw_piece_at(renderer, piece, pconfig, t);
     }

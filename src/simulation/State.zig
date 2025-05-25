@@ -51,15 +51,15 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
                     // TODO: log/notify out of time traveling memory
                     state.time_cursor.discover_transition(model_input, varout_model, &varout_time_cursor) orelse unreachable;
                     varout_time_cursor.sort_inplace();
-                    break :blk state.update_animations(anim_input);
+                    break :blk update_animations(state.anims, anim_input);
                 } else blk: {
                     // TODO: log/notify invalid move
                     varout_time_cursor = state.time_cursor;
-                    break :blk state.tick_anims();
+                    break :blk tick_anims(state.anims);
                 };
             } else blk: {
                 varout_time_cursor = state.time_cursor;
-                break :blk state.tick_anims();
+                break :blk tick_anims(state.anims);
             };
             const out_map_cursor = varout_map_cursor;
             const out_time_cursor = varout_time_cursor;
@@ -86,11 +86,28 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
             ) orelse time_cursor1;
             const out_active_cursor = varout_active_cursor;
 
+            const out_anims = @as(Animations, if (0 < state.anims.slice().len)
+                tick_anims(state.anims)
+            else blk: {
+                const model_tree = state.time_cursor.model_tree;
+                const opt_parent_input_idx = model_tree.get_parent_input(state.time_cursor.model_idx);
+                break :blk if (opt_parent_input_idx) |parent_input_idx| blk2: {
+                    const parent_input = model_tree.input_slice()[parent_input_idx];
+                    const parent_model_idx = model_tree.get_parent_state(state.time_cursor.model_idx);
+                    const parent_model = model_tree.state_slice()[parent_model_idx];
+
+                    var dummy_model = @as(Model, undefined);
+                    const anim_input = parent_model.step(parent_input, model_config, &dummy_model).?;
+                    std.debug.assert(state.time_cursor.curr_model().eql(dummy_model));
+                    break :blk2 update_animations(state.anims, anim_input);
+                } else .{};
+            });
+
             break :out_state State{
                 .active_cursor = out_active_cursor,
                 .map_cursor = state.map_cursor,
                 .time_cursor = out_time_cursor,
-                .anims = .{},
+                .anims = out_anims,
             };
         },
     };
@@ -417,11 +434,16 @@ pub const TimeCursor = struct {
     }
 
     pub fn curr_model(cursor: TimeCursor) Model {
-        return cursor.model_tree.state_slice()[cursor.model_idx];
+        return cursor.model_tree.get_state(cursor.model_idx);
+    }
+
+    pub fn parent_model(cursor: TimeCursor) Model {
+        const idx = cursor.model_tree.get_parent_state(cursor.model_idx);
+        return cursor.model_tree.get_state(idx);
     }
 
     pub fn root_model(cursor: TimeCursor) Model {
-        return cursor.model_tree.state_slice()[0];
+        return cursor.model_tree.get_state(0);
     }
 
     pub fn root_model_mut(cursor: *TimeCursor) *Model {
@@ -588,7 +610,7 @@ pub const Animation = struct {
                         .path = move.path,
                         .path_idx = move.path_idx,
                     }
-                else if (move.path_idx + 1 < move.path.size)
+                else if (move.path_idx < move.path.size)
                     .{
                         .curr_pos = move.curr_pos.move_unbounded(move.path.get(move.path_idx)),
                         .path = move.path,
@@ -634,11 +656,11 @@ pub const Animation = struct {
     }
 };
 
-fn update_animations(state: State, anim_input: Model.AnimationInput) Animations {
+fn update_animations(anims: Animations, anim_input: Model.AnimationInput) Animations {
     const piece_id = switch (anim_input) {
         .move => |move| move.piece_id(),
     };
-    const anims_slice = state.anims.slice();
+    const anims_slice = anims.slice();
 
     var buffer = Animations.Builder{};
     const idx_after_inclusion = for (anims_slice, 0..) |anim, i| {
@@ -690,9 +712,9 @@ fn update_animations(state: State, anim_input: Model.AnimationInput) Animations 
     return buffer.frozen();
 }
 
-fn tick_anims(state: State) Animations {
+fn tick_anims(anims: Animations) Animations {
     var buffer = Animations.Builder{};
-    for (state.anims.slice()) |anim| {
+    for (anims.slice()) |anim| {
         if (anim.tick()) |new_anim| {
             buffer.push_mut(new_anim);
         } else {
