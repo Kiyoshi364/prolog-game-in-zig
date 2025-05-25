@@ -33,7 +33,6 @@ tile: Tile,
 piece: Piece,
 map_cursor: MapCursor,
 timestate: TimeState,
-// TODO: time_cursor: TimeCursor,
 path: Path,
 
 const RaylibRenderer = @This();
@@ -153,6 +152,8 @@ pub const Piece = struct {
     kinds_factor_size: [Model.Piece.Kind.count]u8,
     kinds_div_size: [Model.Piece.Kind.count]u8,
 
+    energy: Energy,
+
     pub const default = Piece{
         .outline_size = 1,
         .outline_color = raylib.GOLD,
@@ -166,6 +167,69 @@ pub const Piece = struct {
             .capitan = 3,
             .minion = 6,
         }),
+
+        .energy = Energy.default,
+    };
+
+    pub const Energy = struct {
+        size_frac: u8,
+        size_div: u8,
+
+        used_frac: u8,
+        used_div: u8,
+
+        pub const default = Energy{
+            .size_frac = 1,
+            .size_div = 16,
+
+            .used_frac = 5,
+            .used_div = 8,
+        };
+
+        fn draw_energies(renergy: *const RaylibRenderer.Piece.Energy, renderer: *const RaylibRenderer, radius: u8, energy_usable: Model.constants.Energy, energy_count: Model.constants.Energy, t: ScreenPos) void {
+            const rtile = renderer.tile;
+            const rpiece = renderer.piece;
+
+            var x = t.x;
+            const splits = 2 * @as(c_int, energy_count) + 1 + 2;
+
+            var it = utils.LenSpliter(c_int).init_iterator(rtile.size, splits);
+            // Note: start Pad
+            x += it.next().?;
+            // Note: first inner Pad
+            x += it.next().?;
+            for (0..energy_count) |i| {
+                const is_energy_used = i < energy_usable;
+                const color = if (is_energy_used)
+                    rpiece.color
+                else
+                    raylib.Color{
+                        .r = @intCast(@as(u16, rpiece.color.r) * renergy.used_frac / renergy.used_div),
+                        .g = @intCast(@as(u16, rpiece.color.g) * renergy.used_frac / renergy.used_div),
+                        .b = @intCast(@as(u16, rpiece.color.b) * renergy.used_frac / renergy.used_div),
+                        .a = 0xFF,
+                    };
+                const outline_color = if (is_energy_used) rpiece.outline_color else raylib.Color{ .a = 0 };
+
+                {
+                    const step = it.next().?;
+                    renderer.draw_circ_outline(
+                        x + step / 2,
+                        t.y + rtile.size - 2 * radius,
+                        @floatFromInt(radius),
+                        color,
+                        1,
+                        outline_color,
+                    );
+                    x += step;
+                }
+                // Note: inner Pad
+                x += it.next().?;
+            }
+            // Note: end pad
+            x += it.next().?;
+            std.debug.assert(it.next() == null);
+        }
     };
 
     fn draw_piece(rpiece: *const RaylibRenderer.Piece, piece: Model.Piece, pconfig: Model.Config.PieceConfig) void {
@@ -233,57 +297,12 @@ pub const Piece = struct {
             },
         }
 
-        // TODO: extract to a function draw_energy
-        {
-            // TODO: extract constants to config
-            const radius = rtile.size * 1 / 16;
-            const max_energy = @max(
-                pconfig.starting_energies[@intFromEnum(piece.kind)],
-                piece.energy,
-            );
-            const energy_used_frac = 5;
-            const energy_used_div = 8;
-
-            var x = t.x;
-            const splits = 2 * @as(c_int, max_energy) + 1 + 2;
-
-            var it = utils.LenSpliter(c_int).init_iterator(rtile.size, splits);
-            // Note: start Pad
-            x += it.next().?;
-            // Note: first inner Pad
-            x += it.next().?;
-            for (0..max_energy) |i| {
-                const is_energy_used = i < piece.energy;
-                const color = if (is_energy_used)
-                    rpiece.color
-                else
-                    raylib.Color{
-                        .r = @intCast(@as(u16, rpiece.color.r) * energy_used_frac / energy_used_div),
-                        .g = @intCast(@as(u16, rpiece.color.g) * energy_used_frac / energy_used_div),
-                        .b = @intCast(@as(u16, rpiece.color.b) * energy_used_frac / energy_used_div),
-                        .a = 0xFF,
-                    };
-                const outline_color = if (is_energy_used) rpiece.outline_color else raylib.Color{ .a = 0 };
-
-                {
-                    const step = it.next().?;
-                    renderer.draw_circ_outline(
-                        x + step / 2,
-                        t.y + rtile.size - 2 * radius,
-                        @floatFromInt(radius),
-                        color,
-                        1,
-                        outline_color,
-                    );
-                    x += step;
-                }
-                // Note: inner Pad
-                x += it.next().?;
-            }
-            // Note: end pad
-            x += it.next().?;
-            std.debug.assert(it.next() == null);
-        }
+        const radius = rtile.size * rpiece.energy.size_frac / rpiece.energy.size_div;
+        const max_energy = @max(
+            pconfig.starting_energies[@intFromEnum(piece.kind)],
+            piece.energy,
+        );
+        rpiece.energy.draw_energies(renderer, radius, piece.energy, max_energy, t);
     }
 };
 
@@ -396,7 +415,6 @@ pub const TimeState = struct {
         .outline_size = 1,
 
         .color = std.enums.directEnumArray(State.CursorTag, [Highlight.count]raylib.Color, 0, .{
-            // TODO: change color
             .map = std.enums.directEnumArray(Highlight, raylib.Color, 0, .{
                 .unrelated = raylib.BLACK,
                 .ancestral = raylib.SKYBLUE,
