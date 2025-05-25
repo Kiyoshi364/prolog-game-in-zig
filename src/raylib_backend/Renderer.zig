@@ -561,6 +561,7 @@ fn draw_map_cursor(renderer: RaylibRenderer, map_cursor: State.MapCursor, active
     renderer.map_cursor.draw_map_cursor_rect(t, cursor_color);
 }
 
+// TODO: use time_cursor.old_model_idx
 fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active_cursor: State.CursorTag) void {
     const Idx = @TypeOf(time_cursor.model_tree).StateIdx;
     const model_tree = time_cursor.model_tree;
