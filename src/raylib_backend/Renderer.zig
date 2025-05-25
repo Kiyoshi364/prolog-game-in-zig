@@ -385,6 +385,8 @@ pub const TimeState = struct {
     color: [State.CursorTag.count][Highlight.count]raylib.Color,
     outline_color: raylib.Color,
 
+    line_height: u8,
+
     pub const default = TimeState{
         .width = 128,
         .height = 32,
@@ -399,7 +401,7 @@ pub const TimeState = struct {
                 .unrelated = raylib.BLACK,
                 .ancestral = raylib.SKYBLUE,
                 .parent = raylib.BLUE,
-                .current = raylib.RED,
+                .current = raylib.ORANGE,
                 .sibling = raylib.DARKGREEN,
                 .child = raylib.MAGENTA,
                 .descendant = raylib.PURPLE,
@@ -415,6 +417,8 @@ pub const TimeState = struct {
             }),
         }),
         .outline_color = raylib.RAYWHITE,
+
+        .line_height = 3,
     };
 
     pub const Highlight = enum {
@@ -429,14 +433,23 @@ pub const TimeState = struct {
         pub const count = @typeInfo(@This()).@"enum".fields.len;
     };
 
-    // TODO: do something with the input to get to this state
-    fn draw_timestate(rtimestate: *const RaylibRenderer.TimeState, idx: usize, active_cursor: State.CursorTag, highlight: RaylibRenderer.TimeState.Highlight, indent: c_int) void {
+    fn draw_line(rtimestate: *const RaylibRenderer.TimeState, x: c_int, y: c_int, active_cursor: State.CursorTag, highlight: RaylibRenderer.TimeState.Highlight) void {
         const renderer = @as(*const RaylibRenderer, @alignCast(@fieldParentPtr("timestate", rtimestate)));
 
         const color = rtimestate.color[@intFromEnum(active_cursor)][@intFromEnum(highlight)];
-        const x = rtimestate.initial_pad + indent * rtimestate.indent;
-        const y = rtimestate.initial_pad + @as(c_int, @intCast(idx)) * (rtimestate.pad + rtimestate.height);
-        const width = rtimestate.width - indent * rtimestate.indent;
+        const width = rtimestate.width + rtimestate.outline_size;
+        for (0..rtimestate.line_height) |i| {
+            const yi = y + @as(c_int, @intCast(i));
+            renderer.draw_line(x, yi, width, yi, color);
+        }
+    }
+
+    // TODO: do something with the input to get to this state
+    fn draw_timestate(rtimestate: *const RaylibRenderer.TimeState, x: c_int, y: c_int, active_cursor: State.CursorTag, highlight: RaylibRenderer.TimeState.Highlight) void {
+        const renderer = @as(*const RaylibRenderer, @alignCast(@fieldParentPtr("timestate", rtimestate)));
+
+        const color = rtimestate.color[@intFromEnum(active_cursor)][@intFromEnum(highlight)];
+        const width = rtimestate.width - x;
         renderer.draw_rect_outline(x, y, width, rtimestate.height, color, rtimestate.outline_size, rtimestate.outline_color);
     }
 };
@@ -538,7 +551,48 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
     const parents = model_tree.parent_states_slice();
     const len = parents.len;
 
-    var highlights_buffer = [_]RaylibRenderer.TimeState.Highlight{.unrelated} ** @TypeOf(time_cursor.model_tree).state_capacity;
+    var lefts_buffer = [_]Idx{undefined} ** @TypeOf(model_tree).state_capacity;
+    const lefts = model_tree.state_left_siblings(&lefts_buffer);
+
+    var rights_buffer = [_]Idx{undefined} ** @TypeOf(model_tree).state_capacity;
+    const rights = model_tree.state_right_siblings(&rights_buffer);
+
+    var indent_diff_buffer = [_]c_int{0} ** @TypeOf(model_tree).state_capacity;
+    const indent_diff = if (0 < len) indent_diff: {
+        var id_bufs = @as([2][@TypeOf(model_tree).state_capacity]@TypeOf(model_tree).StateIdx, undefined);
+        var last_id = model_tree.get_state_id(0, &id_bufs[0]);
+        var id_idx = @as(u1, 1);
+        for (indent_diff_buffer[0..len-1], 1..) |*out, i| {
+            const curr_id = model_tree.get_state_id(@intCast(i), &id_bufs[id_idx]);
+
+            const min_len = @min(last_id.len, curr_id.len);
+            const prefix = for (last_id[0..min_len], curr_id[0..min_len], 0..) |l, c, idx| {
+                if (l != c) {
+                    break idx;
+                }
+            } else min_len;
+            if (!(
+                (min_len == curr_id.len and prefix == min_len - 1)
+                or (min_len != curr_id.len and min_len == last_id.len and prefix == min_len)
+            )) {
+                std.debug.print("min_len: {}, prefix: {}\n", .{min_len, prefix});
+                std.debug.print("{}: [{}]{any}\n", .{i-1, last_id.len, last_id});
+                std.debug.print("{}: [{}]{any}\n", .{i, curr_id.len, curr_id});
+                unreachable;
+            }
+
+            var diff = @as(c_int, @intFromBool(lefts[i] == i and rights[i] != i));
+            out.* = for (last_id[prefix..]) |j| {
+                diff -= if (lefts[j] != j and rights[j] == j) 1 else 0;
+            } else diff;
+
+            last_id = curr_id;
+            id_idx ^= 1;
+        }
+        break :indent_diff indent_diff_buffer[0..len-1];
+    } else indent_diff_buffer[0..len-1];
+
+    var highlights_buffer = [_]RaylibRenderer.TimeState.Highlight{.unrelated} ** @TypeOf(model_tree).state_capacity;
     const highlights = highlights: {
         {
             var it = model_idx;
@@ -554,8 +608,8 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
             }
             highlights_buffer[it] = curr_highlight;
         }
-        for (0..len) |i| {
-            if (highlights_buffer[i] != .unrelated) {
+        for (highlights_buffer[0..len], parents, 0..) |*out, pi, i| {
+            if (out.* != .unrelated) {
                 continue;
             }
             var it = @as(Idx, @intCast(i));
@@ -563,12 +617,12 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
             while (it != parents[it] and it != model_idx) : (it = parents[it]) {
                 depth += 1;
             }
-            highlights_buffer[i] = if (it == model_idx)
+            out.* = if (it == model_idx)
                 if (depth <= 1)
                     .child
                 else
                     .descendant
-            else if (parents[model_idx] == parents[i])
+            else if (parents[model_idx] == pi)
                 .sibling
             else
                 .unrelated;
@@ -576,9 +630,31 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
         break :highlights highlights_buffer[0..len];
     };
 
-    for (0..time_cursor.model_tree.state_slice().len) |i| {
-        // TODO: use indent
-        renderer.timestate.draw_timestate(i, active_cursor, highlights[i], 0);
+    if (0 < len) {
+        var indent = @as(c_int, 0);
+        var x = @as(c_int, renderer.timestate.initial_pad);
+        var y = @as(c_int, renderer.timestate.initial_pad);
+
+        renderer.timestate.draw_timestate(x, y, active_cursor, highlights[0]);
+        y += renderer.timestate.pad + renderer.timestate.height;
+
+        for (1..len) |i| {
+            indent += indent_diff[i-1];
+            x += indent_diff[i-1] * renderer.timestate.indent;
+
+            std.debug.assert(x == renderer.timestate.initial_pad + indent * (renderer.timestate.indent));
+            const has_left_sibling = parents[i] != i - 1;
+
+            if (has_left_sibling) {
+                renderer.timestate.draw_line(x, y - renderer.timestate.pad/2, active_cursor, highlights[i]);
+                y += renderer.timestate.line_height;
+            } else {
+                // Nothing
+            }
+
+            renderer.timestate.draw_timestate(x, y, active_cursor, highlights[i]);
+            y += renderer.timestate.pad + renderer.timestate.height;
+        }
     }
 }
 
