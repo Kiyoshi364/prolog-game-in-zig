@@ -580,7 +580,7 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
         var id_bufs = @as([2][@TypeOf(model_tree).state_capacity]@TypeOf(model_tree).StateIdx, undefined);
         var last_id = model_tree.get_state_id(0, &id_bufs[0]);
         var id_idx = @as(u1, 1);
-        for (indent_diff_buffer[0..len-1], 1..) |*out, i| {
+        for (indent_diff_buffer[0 .. len - 1], 1..) |*out, i| {
             const curr_id = model_tree.get_state_id(@intCast(i), &id_bufs[id_idx]);
 
             const min_len = @min(last_id.len, curr_id.len);
@@ -589,15 +589,13 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
                     break idx;
                 }
             } else min_len;
-            if (!(
-                (min_len == curr_id.len and prefix == min_len - 1)
-                or (min_len != curr_id.len and min_len == last_id.len and prefix == min_len)
-            )) {
-                std.debug.print("min_len: {}, prefix: {}\n", .{min_len, prefix});
-                std.debug.print("{}: [{}]{any}\n", .{i-1, last_id.len, last_id});
-                std.debug.print("{}: [{}]{any}\n", .{i, curr_id.len, curr_id});
-                unreachable;
-            }
+            std.debug.assert(
+                (min_len == curr_id.len and
+                    prefix == min_len - 1) or
+                    (min_len != curr_id.len and
+                        min_len == last_id.len and
+                        prefix == min_len),
+            );
 
             var diff = @as(c_int, @intFromBool(lefts[i] == i and rights[i] != i));
             out.* = for (last_id[prefix..]) |j| {
@@ -607,8 +605,8 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
             last_id = curr_id;
             id_idx ^= 1;
         }
-        break :indent_diff indent_diff_buffer[0..len-1];
-    } else indent_diff_buffer[0..len-1];
+        break :indent_diff indent_diff_buffer[0 .. len - 1];
+    } else indent_diff_buffer[0 .. len - 1];
 
     var highlights_buffer = [_]RaylibRenderer.TimeState.Highlight{.unrelated} ** @TypeOf(model_tree).state_capacity;
     const highlights = highlights: {
@@ -657,14 +655,14 @@ fn draw_timeline(renderer: RaylibRenderer, time_cursor: State.TimeCursor, active
         y += renderer.timestate.pad + renderer.timestate.height;
 
         for (1..len) |i| {
-            indent += indent_diff[i-1];
-            x += indent_diff[i-1] * renderer.timestate.indent;
+            indent += indent_diff[i - 1];
+            x += indent_diff[i - 1] * renderer.timestate.indent;
 
             std.debug.assert(x == renderer.timestate.initial_pad + indent * (renderer.timestate.indent));
             const has_left_sibling = parents[i] != i - 1;
 
             if (has_left_sibling) {
-                renderer.timestate.draw_line(x, y - renderer.timestate.pad/2, active_cursor, highlights[i]);
+                renderer.timestate.draw_line(x, y - renderer.timestate.pad / 2, active_cursor, highlights[i]);
                 y += renderer.timestate.line_height;
             } else {
                 // Nothing

@@ -269,14 +269,13 @@ pub fn UptreeWithBuffer(
                             break @intCast(j);
                         }
                     } else @intCast(i)
-                else
-                    for (0..i) |pre_j| {
-                        const j = i - pre_j - 1;
-                        const pj = p[j];
-                        if (pi == pj and pj != j) {
-                            break @intCast(j);
-                        }
-                    } else @intCast(i);
+                else for (0..i) |pre_j| {
+                    const j = i - pre_j - 1;
+                    const pj = p[j];
+                    if (pi == pj and pj != j) {
+                        break @intCast(j);
+                    }
+                } else @intCast(i);
             }
             return lefts;
         }
@@ -288,17 +287,16 @@ pub fn UptreeWithBuffer(
             const rights = buf[0..len];
             for (rights, p, 0..) |*out, pi, i| {
                 out.* = if (pi == i)
-                    for (p[i+1..], i+1..) |pj, j| {
+                    for (p[i + 1 ..], i + 1..) |pj, j| {
                         if (pj == j) {
                             break @intCast(j);
                         }
                     } else @intCast(i)
-                else
-                    for (p[i+1..], i+1..) |pj, j| {
-                        if (pi == pj and pj != j) {
-                            break @intCast(j);
-                        }
-                    } else @intCast(i);
+                else for (p[i + 1 ..], i + 1..) |pj, j| {
+                    if (pi == pj and pj != j) {
+                        break @intCast(j);
+                    }
+                } else @intCast(i);
             }
             return rights;
         }
