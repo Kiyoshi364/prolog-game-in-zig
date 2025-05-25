@@ -73,11 +73,12 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
         },
         .time => out_state: {
             var varout_active_cursor = @as(CursorTag, undefined);
-            const time_cursor1 = state.time_cursor.move_dirs(
+            const moved_time_cursor = state.time_cursor.move_dirs(
                 state_input.modifier(),
                 state_input.dirs,
                 &varout_active_cursor,
-            ) orelse state.time_cursor;
+            );
+            const time_cursor1 = moved_time_cursor orelse state.time_cursor;
 
             const out_time_cursor = time_cursor1.handle_button(
                 state_input.modifier(),
@@ -86,22 +87,46 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
             ) orelse time_cursor1;
             const out_active_cursor = varout_active_cursor;
 
-            const out_anims = @as(Animations, if (0 < state.anims.slice().len)
-                tick_anims(state.anims)
-            else blk: {
-                const model_tree = state.time_cursor.model_tree;
-                const opt_parent_input_idx = model_tree.get_parent_input(state.time_cursor.model_idx);
-                break :blk if (opt_parent_input_idx) |parent_input_idx| blk2: {
-                    const parent_input = model_tree.input_slice()[parent_input_idx];
-                    const parent_model_idx = model_tree.get_parent_state(state.time_cursor.model_idx);
-                    const parent_model = model_tree.state_slice()[parent_model_idx];
+            const out_anims = if (moved_time_cursor) |_| out_anims: {
+                const forward_dir = Model.Direction.down;
+                const backward_dir = Model.Direction.up;
+                const steps_backwards = for (state_input.dirs, 0..) |does_step, i| {
+                    const dir = @as(Model.Direction, @enumFromInt(i));
+                    if (dir == forward_dir) {
+                        continue;
+                    }
+                    if (does_step) {
+                        break true;
+                    }
+                } else false;
+                const steps_forwards = for (state_input.dirs, 0..) |does_step, i| {
+                    const dir = @as(Model.Direction, @enumFromInt(i));
+                    if (dir == backward_dir) {
+                        continue;
+                    }
+                    if (does_step) {
+                        break true;
+                    }
+                } else false;
 
-                    var dummy_model = @as(Model, undefined);
-                    const anim_input = parent_model.step(parent_input, model_config, &dummy_model).?;
-                    std.debug.assert(state.time_cursor.curr_model().eql(dummy_model));
-                    break :blk2 update_animations(state.anims, anim_input);
-                } else .{};
-            });
+                // TODO: add looping for last input's animation
+                const anims0 = if (steps_backwards) Animations{} else state.anims;
+                break :out_anims if (steps_forwards) blk: {
+                    const model_tree = out_time_cursor.model_tree;
+                    const opt_parent_input_idx = model_tree.get_parent_input(out_time_cursor.model_idx);
+                    // TODO: store animation in the model_tree to avoid recalling Model.step
+                    break :blk if (opt_parent_input_idx) |parent_input_idx| blk2: {
+                        const parent_input = model_tree.input_slice()[parent_input_idx];
+                        const parent_model_idx = model_tree.get_parent_state(out_time_cursor.model_idx);
+                        const parent_model = model_tree.state_slice()[parent_model_idx];
+
+                        var dummy_model = @as(Model, undefined);
+                        const anim_input = parent_model.step(parent_input, model_config, &dummy_model).?;
+                        std.debug.assert(out_time_cursor.curr_model().eql(dummy_model));
+                        break :blk2 update_animations(state.anims, anim_input);
+                    } else tick_anims(anims0);
+                } else tick_anims(anims0);
+            } else tick_anims(state.anims);
 
             break :out_state State{
                 .active_cursor = out_active_cursor,
