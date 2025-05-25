@@ -255,7 +255,7 @@ pub fn UptreeWithBuffer(
             };
         }
 
-        // TODO: use SIMD
+        // TODO: try SIMD/@Vector
         pub fn state_left_siblings(self: Self, buf: *StateIdxArray) []StateIdx {
             const p = self.parent_states_slice();
             const len = p.len;
@@ -281,7 +281,7 @@ pub fn UptreeWithBuffer(
             return lefts;
         }
 
-        // TODO: use SIMD
+        // TODO: try SIMD/@Vector
         pub fn state_right_siblings(self: Self, buf: *StateIdxArray) []StateIdx {
             const p = self.parent_states_slice();
             const len = p.len;
@@ -301,6 +301,21 @@ pub fn UptreeWithBuffer(
                     } else @intCast(i);
             }
             return rights;
+        }
+
+        // TODO: try SIMD/@Vector
+        pub fn state_depths(self: Self, buf: *StateIdxArray) []StateIdx {
+            const p = self.parent_states_slice();
+            const len = p.len;
+            const depths = buf[0..len];
+            for (depths, 0..) |*out, i| {
+                var it = @as(StateIdx, @intCast(i));
+                var d = @as(StateIdx, 0);
+                out.* = while (it != p[it]) : (it = p[it]) {
+                    d += 1;
+                } else d;
+            }
+            return depths;
         }
     };
 }
@@ -434,6 +449,12 @@ test "UptreeWithBuffer: tree building" {
             Tree.StateIdx,
             &.{ 0, 1, 3, 3, 5, 5, 7, 7, 9, 9 },
             tree.state_right_siblings(&buf),
+        );
+
+        try std.testing.expectEqualSlices(
+            Tree.StateIdx,
+            &.{ 0, 1, 2, 2, 3, 3, 3, 3, 4, 4 },
+            tree.state_depths(&buf),
         );
     }
 }
