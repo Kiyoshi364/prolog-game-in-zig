@@ -49,7 +49,7 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
                 var varout_model = @as(Model, undefined);
                 break :out_anims if (model.step(model_input, model_config, &varout_model)) |anim_input| blk: {
                     // TODO: log/notify out of time traveling memory
-                    state.time_cursor.discover_transition(model_input, varout_model, &varout_time_cursor) orelse unreachable;
+                    state.time_cursor.discover_transition(model_input, anim_input, varout_model, &varout_time_cursor) orelse unreachable;
                     varout_time_cursor.sort_inplace();
                     break :blk update_animations(state.anims, anim_input);
                 } else blk: {
@@ -111,9 +111,9 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
 
                 // TODO: add looping for last input's animation
                 const anims0 = if (steps_backwards) blk: {
-                    const back_input_idx = state.time_cursor.model_tree.get_parent_input(state.time_cursor.model_idx) orelse unreachable;
-                    const back_input = state.time_cursor.model_tree.get_input(back_input_idx);
-                    const piece_id = switch (back_input) {
+                    const back_inputanim_idx = state.time_cursor.model_tree.get_parent_input(state.time_cursor.model_idx) orelse unreachable;
+                    const back_inputanim = state.time_cursor.model_tree.get_input(back_inputanim_idx);
+                    const piece_id = switch (back_inputanim.input) {
                         .move => |move| move.piece_id(),
                     };
 
@@ -125,17 +125,10 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
                 } else state.anims;
                 break :out_anims if (steps_forwards) blk: {
                     const model_tree = out_time_cursor.model_tree;
-                    const opt_parent_input_idx = model_tree.get_parent_input(out_time_cursor.model_idx);
-                    // TODO: store animation in the model_tree to avoid recalling Model.step
-                    break :blk if (opt_parent_input_idx) |parent_input_idx| blk2: {
-                        const parent_input = model_tree.input_slice()[parent_input_idx];
-                        const parent_model_idx = model_tree.get_parent_state(out_time_cursor.model_idx);
-                        const parent_model = model_tree.state_slice()[parent_model_idx];
-
-                        var dummy_model = @as(Model, undefined);
-                        const anim_input = parent_model.step(parent_input, model_config, &dummy_model).?;
-                        std.debug.assert(out_time_cursor.curr_model().eql(dummy_model));
-                        break :blk2 update_animations(anims0, anim_input);
+                    const opt_parent_inputanim_idx = model_tree.get_parent_input(out_time_cursor.model_idx);
+                    break :blk if (opt_parent_inputanim_idx) |parent_inputanim_idx| blk2: {
+                        const parent_inputanim = model_tree.input_slice()[parent_inputanim_idx];
+                        break :blk2 update_animations(anims0, parent_inputanim.anim);
                     } else tick_anims(anims0);
                 } else tick_anims(anims0);
             } else tick_anims(state.anims);
@@ -176,17 +169,19 @@ pub fn check(state: State, model_config: Model.Config) bool {
     {
         // Check model_tree is consistent
         const models = state.time_cursor.model_tree.state_slice();
-        const inputs = state.time_cursor.model_tree.input_slice();
+        const inputanims = state.time_cursor.model_tree.input_slice();
         const parent_models = state.time_cursor.model_tree.parent_states_slice();
         const parent_inputs = state.time_cursor.model_tree.parent_inputs_slice();
 
         for (models, parent_models, parent_inputs, 0..) |model, p_idx, opt_i_idx, it| {
             if (p_idx != it) {
                 const parent_model = models[p_idx];
-                const parent_input = inputs[opt_i_idx.?];
+                const parent_inputanim = inputanims[opt_i_idx.?];
+                const parent_input = parent_inputanim.input;
+                const parent_anim = parent_inputanim.anim;
                 var next_model = @as(Model, undefined);
                 const opt_anim_input = parent_model.step(parent_input, model_config, &next_model);
-                std.debug.assert(opt_anim_input != null);
+                std.debug.assert(std.meta.eql(opt_anim_input.?, parent_anim));
                 std.debug.assert(model.eql(next_model));
             } else {
                 std.debug.assert(opt_i_idx == null);
@@ -458,8 +453,12 @@ pub const TimeCursor = struct {
     model_idx: ModelIdx,
     old_model_idx: ModelIdx,
 
+    const InputAnim = struct {
+        input: Model.Input,
+        anim: Model.AnimationInput,
+    };
     // TODO: use Updag instead of Uptree
-    const ModelTree = utils.UptreeWithBuffer(Model, Model.Input, constants.max_model_storage, constants.max_model_storage);
+    const ModelTree = utils.UptreeWithBuffer(Model, InputAnim, constants.max_model_storage, constants.max_model_storage);
     const ModelIdx = ModelTree.StateIdx;
 
     pub fn with_root(the_root_model: Model) TimeCursor {
@@ -488,20 +487,21 @@ pub const TimeCursor = struct {
         return &cursor.model_tree.state_buffer.buffer[0];
     }
 
-    fn discover_transition(cursor: TimeCursor, input: Model.Input, next_model: Model, out_cursor: *TimeCursor) ?void {
-        const reg_input = cursor.model_tree.find_input_or_register(input) orelse return null;
-        std.debug.assert(std.meta.eql(reg_input.self.input_slice()[reg_input.idx], input));
+    fn discover_transition(cursor: TimeCursor, input: Model.Input, anim_input: Model.AnimationInput, next_model: Model, out_cursor: *TimeCursor) ?void {
+        const input_anim = InputAnim{ .input = input, .anim = anim_input };
+        const reg_input = cursor.model_tree.find_input_or_register(input_anim) orelse return null;
+        std.debug.assert(std.meta.eql(reg_input.self.input_slice()[reg_input.idx], input_anim));
         const reg_state = reg_input.self.register_state(
             next_model,
             .{ .input = reg_input.idx, .state = cursor.model_idx },
         ) orelse return null;
-        std.debug.assert(std.meta.eql(reg_state.self.input_slice()[reg_input.idx], input));
+        std.debug.assert(std.meta.eql(reg_state.self.input_slice()[reg_input.idx], input_anim));
         out_cursor.* = .{
             .model_tree = reg_state.self,
             .model_idx = reg_state.idx,
             .old_model_idx = reg_state.idx,
         };
-        std.debug.assert(std.meta.eql(out_cursor.model_tree.input_slice()[reg_input.idx], input));
+        std.debug.assert(std.meta.eql(out_cursor.model_tree.input_slice()[reg_input.idx], input_anim));
     }
 
     fn sort_inplace(cursor: *TimeCursor) void {
