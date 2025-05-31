@@ -209,18 +209,18 @@ pub fn check(state: State, model_config: Model.Config) bool {
     return true;
 }
 
-fn moved_control(ret: anytype, dir: Model.Direction, out_activecursor: *CursorTag) ?@TypeOf(ret) {
+fn moved_control(ret: anytype, curr_activecursor: CursorTag, dir: Model.Direction, out_activecursor: *CursorTag) ?@TypeOf(ret) {
     return switch (dir) {
         .up => null,
-        .left => blk: {
+        .left => if (curr_activecursor != .map) blk: {
             out_activecursor.* = .map;
             break :blk ret;
-        },
+        } else null,
         .down => null,
-        .right => blk: {
+        .right => if (curr_activecursor != .time) blk: {
             out_activecursor.* = .time;
             break :blk ret;
-        },
+        } else null,
     };
 }
 
@@ -401,7 +401,7 @@ pub const MapCursor = struct {
                 } else null
             else
                 null,
-            .control => if (moved_control(cursor.selection, dir, out_activecursor)) |selection|
+            .control => if (moved_control(cursor.selection, .map, dir, out_activecursor)) |selection|
                 .{ .pos = cursor.pos, .selection = selection }
             else
                 null,
@@ -561,7 +561,7 @@ pub const TimeCursor = struct {
                     .old_model_idx = cursor.old_model_idx,
                 };
             } else null,
-            .control => moved_control(cursor, dir, out_activecursor),
+            .control => moved_control(cursor, .time, dir, out_activecursor),
         };
     }
 
