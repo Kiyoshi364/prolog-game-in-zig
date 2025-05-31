@@ -48,6 +48,19 @@ pub fn Buffer(comptime T: type, comptime Idx: type, comptime capacity: Idx) type
             return b.frozen();
         }
 
+        pub fn without(self: *const Self, target: Idx) Self {
+            std.debug.assert(target < self.size);
+            var b = Builder{};
+            for (self.slice(), 0..) |it, i| {
+                if (i == target) {
+                    // Nothing
+                } else {
+                    b.push_mut(it);
+                }
+            }
+            return b.frozen();
+        }
+
         pub fn replace(self: *const Self, target: Idx, item: T) Self {
             var b = self.as_builder();
             b.replace(target, item);

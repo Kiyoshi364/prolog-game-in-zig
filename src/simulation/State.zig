@@ -110,7 +110,19 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
                 } else false;
 
                 // TODO: add looping for last input's animation
-                const anims0 = if (steps_backwards) Animations{} else state.anims;
+                const anims0 = if (steps_backwards) blk: {
+                    const back_input_idx = state.time_cursor.model_tree.get_parent_input(state.time_cursor.model_idx) orelse unreachable;
+                    const back_input = state.time_cursor.model_tree.get_input(back_input_idx);
+                    const piece_id = switch (back_input) {
+                        .move => |move| move.piece_id(),
+                    };
+
+                    break :blk for (state.anims.slice(), 0..) |anim, i| {
+                        if (anim.piece_id == piece_id) {
+                            break state.anims.without(@intCast(i));
+                        }
+                    } else state.anims;
+                } else state.anims;
                 break :out_anims if (steps_forwards) blk: {
                     const model_tree = out_time_cursor.model_tree;
                     const opt_parent_input_idx = model_tree.get_parent_input(out_time_cursor.model_idx);
@@ -123,7 +135,7 @@ pub fn step(state: State, state_input: StateInput, model_config: Model.Config) ?
                         var dummy_model = @as(Model, undefined);
                         const anim_input = parent_model.step(parent_input, model_config, &dummy_model).?;
                         std.debug.assert(out_time_cursor.curr_model().eql(dummy_model));
-                        break :blk2 update_animations(state.anims, anim_input);
+                        break :blk2 update_animations(anims0, anim_input);
                     } else tick_anims(anims0);
                 } else tick_anims(anims0);
             } else tick_anims(state.anims);
