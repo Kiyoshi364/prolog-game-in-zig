@@ -10,13 +10,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const utils_mod = b.createModule(.{
+    const utils_mod = b.addModule("utils", .{
         .root_source_file = b.path("src/utils.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    const sim_mod = b.createModule(.{
+    const sim_mod = b.addModule("simulation", .{
         .root_source_file = b.path("src/simulation/sim.zig"),
         .target = target,
         .optimize = optimize,
