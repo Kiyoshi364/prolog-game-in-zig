@@ -14,32 +14,40 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/utils.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = false,
     });
 
     const sim_mod = b.addModule("simulation", .{
         .root_source_file = b.path("src/simulation/sim.zig"),
+        .imports = &.{
+            .{ .name = "utils", .module = utils_mod },
+        },
         .target = target,
         .optimize = optimize,
+        .link_libc = false,
     });
-    sim_mod.addImport("utils", utils_mod);
 
     const backend_mod = b.createModule(.{
         .root_source_file = b.path("src/raylib_backend.zig"),
+        .imports = &.{
+            .{ .name = "utils", .module = utils_mod },
+            .{ .name = "simulation", .module = sim_mod },
+        },
         .target = target,
         .optimize = optimize,
     });
-    backend_mod.addImport("utils", utils_mod);
-    backend_mod.addImport("simulation", sim_mod);
     backend_mod.linkLibrary(raylib_dep.artifact("raylib"));
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
+        .imports = &.{
+            .{ .name = "simulation", .module = sim_mod },
+            .{ .name = "backend", .module = backend_mod },
+        },
         .target = target,
         .optimize = optimize,
+        .link_libc = false,
     });
-
-    exe_mod.addImport("simulation", sim_mod);
-    exe_mod.addImport("backend", backend_mod);
 
     const lib = b.addLibrary(.{
         .linkage = .static,
