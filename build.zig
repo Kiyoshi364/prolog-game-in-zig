@@ -5,6 +5,8 @@ pub fn build(b: *std.Build) void {
 
     const optimize = b.standardOptimizeOption(.{});
 
+    const interface_h_include = b.path("interface/");
+
     const raylib_dep = b.dependency("raylib", .{
         .target = target,
         .optimize = optimize,
@@ -26,6 +28,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = false,
     });
+    sim_mod.addIncludePath(interface_h_include);
 
     const backend_mod = b.createModule(.{
         .root_source_file = b.path("src/raylib_backend.zig"),
@@ -41,13 +44,13 @@ pub fn build(b: *std.Build) void {
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .imports = &.{
-            .{ .name = "simulation", .module = sim_mod },
             .{ .name = "backend", .module = backend_mod },
         },
         .target = target,
         .optimize = optimize,
         .link_libc = false,
     });
+    exe_mod.addIncludePath(interface_h_include);
 
     const lib = b.addLibrary(.{
         .linkage = .static,

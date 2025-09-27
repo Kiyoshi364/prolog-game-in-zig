@@ -45,6 +45,15 @@ pub const default = RaylibRenderer{
     .path = Path.default,
 };
 
+pub fn draw_(in_renderer: RaylibRenderer, state_buf: []const u8, model_config_buf: []const u8) void {
+    std.debug.assert(@sizeOf(State) <= state_buf.len);
+    std.debug.assert(@sizeOf(Model.Config) <= model_config_buf.len);
+    return in_renderer.draw(
+        @as(*const State, @alignCast(@ptrCast(state_buf.ptr))).*,
+        @as(*const Model.Config, @ptrCast(model_config_buf.ptr)).*,
+    );
+}
+
 pub fn draw(in_renderer: RaylibRenderer, state: State, model_config: Model.Config) void {
     var renderer = in_renderer;
     raylib.BeginDrawing();
