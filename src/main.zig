@@ -1,9 +1,6 @@
 const std = @import("std");
 
-// TODO: make a wrapper
-const sim_c = @cImport({
-    @cInclude("simulation.h");
-});
+const sim = @import("sim.zig");
 
 const backend = @import("backend");
 
@@ -22,31 +19,31 @@ pub fn main() !void {
     var inputer_ = @as(Inputer, undefined);
 
     const config = blk: {
-        var len = @as(u64, config_buffer.len);
-        if (!sim_c.starting_config(&config_buffer, &len)) {
-            if (config_buffer.len < len) {
-                std.debug.print("{} < {}\n", .{ config_buffer.len, len });
-                return error.NotEnoughMemoryForConfig;
-            } else {
-                std.debug.print("Internal Error: {}\n", .{len});
-                return error.InternalErrorForConfig;
-            }
-        }
-        break :blk config_buffer[0..len];
+        var err_info = sim.StartingErrorInfo.empty;
+        break :blk sim.starting_config(&config_buffer, &err_info) catch |err| switch (err) {
+            error.NotEnoughMemory => {
+                std.debug.print("{} < {}\n", .{ config_buffer.len, err_info.len });
+                return error.NotEnoughMemoryForStartingConfig;
+            },
+            error.InternalError => {
+                std.debug.print("Internal Error: {}\n", .{ err_info.len });
+                return error.InternalErrorForStartingConfig;
+            },
+        };
     };
 
     var state = blk: {
-        var len = @as(u64, state_buffer.len);
-        if (!sim_c.starting_state(config.ptr, config.len, &state_buffer, &len)) {
-            if (state_buffer.len < len) {
-                std.debug.print("{} < {}\n", .{ state_buffer.len, len });
-                return error.NotEnoughMemoryForState;
-            } else {
-                std.debug.print("Internal Error: {}\n", .{len});
-                return error.InternalErrorForState;
-            }
-        }
-        break :blk state_buffer[0..len];
+        var err_info = sim.StartingErrorInfo.empty;
+        break :blk sim.starting_state(config, &state_buffer, &err_info) catch |err| switch (err) {
+            error.NotEnoughMemory => {
+                std.debug.print("{} < {}\n", .{ state_buffer.len, err_info.len });
+                return error.NotEnoughMemoryForStartingState;
+            },
+            error.InternalError => {
+                std.debug.print("Internal Error: {}\n", .{ err_info.len });
+                return error.InternalErrorForStartingState;
+            },
+        };
     };
 
     var state_ = @as([]u8, state_buffer_[0..]);
@@ -70,19 +67,11 @@ pub fn main() !void {
         const state_input = inputer.get_input(input_config, &inputer_);
         const state_input_buf = @as(*const [@sizeOf(@TypeOf(state_input))]u8, @ptrCast(&state_input))[0..];
 
-        var len = @as(u64, state_buffer_len);
-        if (sim_c.state_step(
-            state_input_buf.ptr,
-            state_input_buf.len,
-            config.ptr,
-            config.len,
-            state.ptr,
-            state.len,
-            state_.ptr,
-            &len,
-        )) {
-            state_ = state_[0..len];
-        } else unreachable;
+        if (sim.state_step(state_input_buf, config, state, state_)) |new_state| {
+            state_ = new_state;
+        } else {
+            return error.StateStepFailed;
+        }
 
         renderer.draw_(state_, config);
     }
