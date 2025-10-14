@@ -27,6 +27,14 @@
  *     (*len) indicates how many bytes the config needs
  */
 bool starting_config(uint8_t buf[], uint64_t *len);
-bool starting_state(const uint8_t config[], uint64_t config_len, uint8_t buf[], uint64_t *len);
+bool starting_state(
+    const uint8_t config[], uint64_t config_len,
+    uint8_t buf[], uint64_t *len
+);
 
-bool state_step(const uint8_t input[], uint64_t input_len, const uint8_t config[], uint64_t config_len, const uint8_t state[], uint64_t state_len, uint8_t out_state[], uint64_t *out_state_len);
+bool state_step(
+    const uint8_t input[], uint64_t input_len,
+    const uint8_t config[], uint64_t config_len,
+    const uint8_t state[], uint64_t state_len,
+    uint8_t out_state[], uint64_t *out_state_len
+);
