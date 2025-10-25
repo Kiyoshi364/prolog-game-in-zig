@@ -7,7 +7,7 @@ const backend = @import("backend");
 const Inputer = backend.Inputer;
 const Renderer = backend.Renderer;
 
-var config_buffer = @as([0x10]u8, undefined);
+var config_buffer = @as([0xA0]u8, undefined);
 
 const state_buffer_len = 0x9000;
 var state_buffer = @as([state_buffer_len]u8, undefined);
@@ -26,7 +26,7 @@ pub fn main() !void {
                 return error.NotEnoughMemoryForStartingConfig;
             },
             error.InternalError => {
-                std.debug.print("Internal Error: {}\n", .{ err_info.len });
+                std.debug.print("Internal Error: {}\n", .{err_info.len});
                 return error.InternalErrorForStartingConfig;
             },
         };
@@ -40,7 +40,7 @@ pub fn main() !void {
                 return error.NotEnoughMemoryForStartingState;
             },
             error.InternalError => {
-                std.debug.print("Internal Error: {}\n", .{ err_info.len });
+                std.debug.print("Internal Error: {}\n", .{err_info.len});
                 return error.InternalErrorForStartingState;
             },
         };
@@ -48,7 +48,7 @@ pub fn main() !void {
 
     var state_ = @as([]u8, state_buffer_[0..]);
 
-    var renderer = Renderer.default;
+    var renderer = backend.Renderer.default;
 
     var window = backend.Window{
         .width = 800,
@@ -73,6 +73,8 @@ pub fn main() !void {
             return error.StateStepFailed;
         }
 
-        renderer.draw_(state_, config);
+        // TODO
+        // sim.state_draw(null, &Renderer.vtable, config, state_);
+        renderer.draw(config, state_);
     }
 }

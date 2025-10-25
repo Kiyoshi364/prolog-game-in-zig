@@ -1,6 +1,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "renderer.h"
+
+/******************** State Creation and Updating ********************/
+
 /** starting_config, starting_state **
  *
  * - buf is writable memory;
@@ -37,4 +41,12 @@ bool state_step(
     const uint8_t config[], uint64_t config_len,
     const uint8_t state[], uint64_t state_len,
     uint8_t out_state[], uint64_t *out_state_len
+);
+
+/******************** State Rendering ********************/
+
+void state_draw(
+    void *ctx, const Renderer *renderer,
+    const uint8_t config[], uint64_t config_len,
+    const uint8_t state[], uint64_t state_len
 );

@@ -2,7 +2,7 @@ const sim_c = @cImport({
     @cInclude("simulation.h");
 });
 
-pub const StartingError = error {
+pub const StartingError = error{
     NotEnoughMemory,
     InternalError,
 };
@@ -62,6 +62,16 @@ pub fn state_step(input: []const u8, config: []const u8, state: []const u8, out_
         state.len,
         out_state.ptr,
         &len,
-    )) out_state[0..len]
-    else null;
+    )) out_state[0..len] else null;
+}
+
+pub fn state_draw(ctx: ?*anyopaque, renderer: *const sim_c.Renderer, config: []const u8, state: []const u8) void {
+    sim_c.state_draw(
+        ctx,
+        renderer,
+        config.ptr,
+        config.len,
+        state.ptr,
+        state.len,
+    );
 }

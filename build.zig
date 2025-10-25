@@ -39,6 +39,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    backend_mod.addIncludePath(interface_h_include);
     backend_mod.linkLibrary(raylib_dep.artifact("raylib"));
 
     const exe_mod = b.createModule(.{

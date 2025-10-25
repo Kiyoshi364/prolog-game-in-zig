@@ -3,10 +3,13 @@ const std = @import("std");
 const simulation = @import("simulation");
 
 pub const Inputer = @import("raylib_backend/Inputer.zig");
-pub const Renderer = @import("raylib_backend/Renderer.zig");
 
 const raylib = @cImport({
     @cInclude("raylib.h");
+});
+// TODO: do not depend on "simulation.h", perhaps just on "renderer.h"
+const sim_c = @cImport({
+    @cInclude("simulation.h");
 });
 
 pub const Window = struct {
@@ -27,5 +30,62 @@ pub const Window = struct {
     pub fn should_close(w: Window) bool {
         _ = w;
         return raylib.WindowShouldClose();
+    }
+};
+
+pub fn to_raylib_color(c: sim_c.Color) raylib.Color {
+    return .{ .r = c.r, .g = c.g, .b = c.b, .a = c.a };
+}
+
+pub const Renderer = struct {
+    pub const default = Renderer{};
+
+    pub const vtable = sim_c.Renderer{
+        .clear_background = clear_background,
+        .set_clip = set_clip,
+        .reset_clip = reset_clip,
+        .draw_rect = draw_rect,
+        .draw_circ = draw_circ,
+        .draw_line = draw_line,
+    };
+
+    pub fn draw(renderer: Renderer, config: []const u8, state: []const u8) void {
+        _ = renderer;
+        raylib.BeginDrawing();
+
+        sim_c.state_draw(null, &vtable, config.ptr, config.len, state.ptr, state.len);
+
+        raylib.DrawFPS(0, raylib.GetScreenHeight() - 16);
+        raylib.EndDrawing();
+    }
+
+    fn clear_background(ctx: ?*anyopaque, color: sim_c.Color) callconv(.c) void {
+        _ = ctx;
+        raylib.ClearBackground(to_raylib_color(color));
+    }
+
+    fn set_clip(ctx: ?*anyopaque, x: i32, y: i32, w: i32, h: i32) callconv(.c) void {
+        _ = ctx;
+        raylib.BeginScissorMode(x, y, w, h);
+    }
+
+    fn reset_clip(ctx: ?*anyopaque) callconv(.c) void {
+        _ = ctx;
+        raylib.EndScissorMode();
+    }
+
+    fn draw_rect(ctx: ?*anyopaque, x: i32, y: i32, w: i32, h: i32, color: sim_c.Color) callconv(.c) void {
+        _ = ctx;
+        raylib.DrawRectangle(x, y, w, h, to_raylib_color(color));
+    }
+
+    fn draw_circ(ctx: ?*anyopaque, x: i32, y: i32, r: f32, color: sim_c.Color) callconv(.c) void {
+        _ = ctx;
+        raylib.DrawCircle(x, y, r, to_raylib_color(color));
+    }
+
+    fn draw_line(ctx: ?*anyopaque, x0: i32, y0: i32, x1: i32, y1: i32, color: sim_c.Color) callconv(.c) void {
+        _ = ctx;
+        raylib.DrawLine(x0, y0, x1, y1, to_raylib_color(color));
     }
 };
