@@ -7,6 +7,11 @@ const simulation = @cImport({
 pub const Model = @import("Model.zig");
 pub const State = @import("State.zig");
 
+fn from_buffer(comptime T: type, buf: []const u8) *const T {
+    std.debug.assert(@sizeOf(T) <= buf.len);
+    return @as(*const T, @alignCast(@ptrCast(buf)));
+}
+
 fn starting_config_(buf: [*c]u8, len: [*c]u64) callconv(.c) bool {
     return starting_config(buf[0..len.*], len);
 }
@@ -40,13 +45,14 @@ pub fn starting_config(config_buf: []u8, out_len: *u64) bool {
 }
 
 fn starting_state_(config: [*c]const u8, config_len: u64, buf: [*c]u8, len: [*c]u64) callconv(.c) bool {
-    return starting_state(config[0..config_len], buf[0..len.*], len);
+    return starting_state(
+        from_buffer(Model.Config, config[0..config_len]).*,
+        buf[0..len.*],
+        len,
+    );
 }
 
-pub fn starting_state(config_buf: []const u8, buf: []u8, out_len: *u64) bool {
-    std.debug.assert(@sizeOf(Model.Config) <= config_buf.len);
-    const model_config = @as(*const Model.Config, @ptrCast(config_buf));
-
+pub fn starting_state(model_config: Model.Config, buf: []u8, out_len: *u64) bool {
     const state_size = @sizeOf(State);
     out_len.* = state_size;
     if (buf.len < state_size) {
@@ -77,24 +83,15 @@ pub fn starting_state(config_buf: []const u8, buf: []u8, out_len: *u64) bool {
 
 fn state_step_(input: [*c]const u8, input_len: u64, config: [*c]const u8, config_len: u64, state: [*c]const u8, state_len: u64, out_state: [*c]u8, out_state_len: [*c]u64) callconv(.c) bool {
     return state_step(
-        input[0..input_len],
-        config[0..config_len],
-        state[0..state_len],
+        from_buffer(State.StateInput, input[0..input_len]).*,
+        from_buffer(Model.Config, config[0..config_len]).*,
+        from_buffer(State, state[0..state_len]).*,
         out_state[0..out_state_len.*],
         out_state_len,
     );
 }
 
-pub fn state_step(input_buf: []const u8, config_buf: []const u8, state_buf: []const u8, out_state_buf: []u8, out_state_len: *u64) bool {
-    std.debug.assert(@sizeOf(State.StateInput) <= input_buf.len);
-    const input = @as(*const State.StateInput, @ptrCast(input_buf)).*;
-
-    std.debug.assert(@sizeOf(Model.Config) <= config_buf.len);
-    const model_config = @as(*const Model.Config, @ptrCast(config_buf)).*;
-
-    std.debug.assert(@sizeOf(State) <= state_buf.len);
-    const state = @as(*const State, @alignCast(@ptrCast(state_buf)));
-
+pub fn state_step(input: State.StateInput, model_config: Model.Config, state: State, out_state_buf: []u8, out_state_len: *u64) bool {
     const out_state_size = @sizeOf(State);
     out_state_len.* = out_state_size;
     if (out_state_buf.len < out_state_size) {
