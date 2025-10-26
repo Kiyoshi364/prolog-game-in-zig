@@ -7,9 +7,8 @@ pub const Inputer = @import("raylib_backend/Inputer.zig");
 const raylib = @cImport({
     @cInclude("raylib.h");
 });
-// TODO: do not depend on "simulation.h", perhaps just on "renderer.h"
 const sim_c = @cImport({
-    @cInclude("simulation.h");
+    @cInclude("renderer.h");
 });
 
 pub const Window = struct {
@@ -38,8 +37,6 @@ pub fn to_raylib_color(c: sim_c.Color) raylib.Color {
 }
 
 pub const Renderer = struct {
-    pub const default = Renderer{};
-
     pub const vtable = sim_c.Renderer{
         .clear_background = clear_background,
         .set_clip = set_clip,
@@ -49,12 +46,11 @@ pub const Renderer = struct {
         .draw_line = draw_line,
     };
 
-    pub fn draw(renderer: Renderer, config: []const u8, state: []const u8) void {
-        _ = renderer;
+    pub fn begin_draw() void {
         raylib.BeginDrawing();
+    }
 
-        sim_c.state_draw(null, &vtable, config.ptr, config.len, state.ptr, state.len);
-
+    pub fn end_draw() void {
         raylib.DrawFPS(0, raylib.GetScreenHeight() - 16);
         raylib.EndDrawing();
     }

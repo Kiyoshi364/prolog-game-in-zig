@@ -48,8 +48,6 @@ pub fn main() !void {
 
     var state_ = @as([]u8, state_buffer_[0..]);
 
-    var renderer = backend.Renderer.default;
-
     var window = backend.Window{
         .width = 800,
         .height = 600,
@@ -73,8 +71,8 @@ pub fn main() !void {
             return error.StateStepFailed;
         }
 
-        // TODO
-        // sim.state_draw(null, &Renderer.vtable, config, state_);
-        renderer.draw(config, state_);
+        Renderer.begin_draw();
+        sim.state_draw(Renderer, null, config, state_);
+        Renderer.end_draw();
     }
 }

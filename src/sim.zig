@@ -65,10 +65,18 @@ pub fn state_step(input: []const u8, config: []const u8, state: []const u8, out_
     )) out_state[0..len] else null;
 }
 
-pub fn state_draw(ctx: ?*anyopaque, renderer: *const sim_c.Renderer, config: []const u8, state: []const u8) void {
+pub fn state_draw(comptime T: type, ctx: ?*T, config: []const u8, state: []const u8) void {
+    const renderer = comptime blk: {
+        const Type = if (@hasDecl(T, "vtable")) T.vtable else T;
+        var renderer = @as(sim_c.Renderer, undefined);
+        break :blk for (@typeInfo(sim_c.Renderer).@"struct".fields) |f| {
+            // NOTE: this is highly error prone
+            @field(renderer, f.name) = @ptrCast(@field(Type, f.name));
+        } else renderer;
+    };
     sim_c.state_draw(
         ctx,
-        renderer,
+        &renderer,
         config.ptr,
         config.len,
         state.ptr,
