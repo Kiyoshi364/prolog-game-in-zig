@@ -130,32 +130,30 @@ fn state_draw(ctx: ?*anyopaque, renderer: *const sim_c.Renderer, config: Config,
 }
 
 comptime {
+    const module = sim_c;
     const funcs = .{
         .{
             .func = &starting_config_,
             .name = "starting_config",
-            .type = @TypeOf(sim_c.starting_config),
         },
         .{
             .func = &starting_state_,
             .name = "starting_state",
-            .type = @TypeOf(sim_c.starting_state),
         },
         .{
             .func = &state_step_,
             .name = "state_step",
-            .type = @TypeOf(sim_c.state_step),
         },
         .{
             .func = &state_draw_,
             .name = "state_draw",
-            .type = @TypeOf(sim_c.state_draw),
         },
     };
     for (funcs) |t| {
-        if (@TypeOf(t.func) != *const t.type) {
+        const FnType = @TypeOf(@field(module, t.name));
+        if (@TypeOf(t.func) != *const FnType) {
             @compileLog(t.func);
-            @compileLog(t.type);
+            @compileLog(FnType);
         }
         @export(t.func, .{ .name = t.name });
     }
